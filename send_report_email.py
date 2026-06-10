@@ -20,10 +20,10 @@ from pathlib import Path
 # ============================================================
 # 配置
 # ============================================================
-SMTP_SERVER = "smtp.126.com"
-SMTP_PORT = 465
-SENDER = os.environ.get("EMAIL_ACCOUNT", "robertomeng@126.com")
-PASSWORD = os.environ.get("EMAIL_PASSWORD", "")
+SMTP_SERVER = "smtp.gmail.com"
+SMTP_PORT = 587
+SENDER = os.environ.get("EMAIL_ACCOUNT", "")
+PASSWORD = os.environ.get("EMAIL_PASSWORD", "")  # Gmail 应用专用密码
 RECIPIENTS = os.environ.get("EMAIL_RECIPIENTS", "mengsiqi@djbx.com,lizhibo@djbx.com").split(",")
 
 
@@ -105,9 +105,10 @@ def send_report(md_path, recipients=None):
             )
             msg.attach(attachment)
 
-    # 发送
+    # 发送 (Gmail 用 STARTTLS)
     try:
-        with smtplib.SMTP_SSL(SMTP_SERVER, SMTP_PORT) as server:
+        with smtplib.SMTP(SMTP_SERVER, SMTP_PORT, timeout=30) as server:
+            server.starttls()
             server.login(SENDER, PASSWORD)
             server.sendmail(SENDER, recipients, msg.as_string())
         print(f"[发送成功] 报告已发送至: {', '.join(recipients)}")

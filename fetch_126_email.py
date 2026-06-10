@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-网易 126 邮箱自动拉取脚本 v2
+Gmail 邮箱自动拉取脚本 v3
   - 从 DM 雷达日报邮件中提取 Excel 下载链接并尝试下载
   - 同时保存邮件 HTML 正文备用
   - 下载成功 → 保存 .xlsx 文件 →供报告生成脚本直接使用
@@ -14,7 +14,6 @@ import datetime
 import re
 import sys
 import os
-import ssl
 import urllib.request
 from email.header import decode_header
 
@@ -22,14 +21,14 @@ from email.header import decode_header
 # ============================================================
 # 用户配置区
 # ============================================================
-EMAIL_ACCOUNT = os.environ.get("EMAIL_ACCOUNT", "robertomeng@126.com")
-EMAIL_PASSWORD = os.environ.get("EMAIL_PASSWORD", "")
-KEYWORD = "DM雷达 2026持仓1"
+EMAIL_ACCOUNT = os.environ.get("EMAIL_ACCOUNT", "")
+EMAIL_PASSWORD = os.environ.get("EMAIL_PASSWORD", "")  # Gmail 应用专用密码
+KEYWORD = os.environ.get("DM_KEYWORD", "DM雷达 2026持仓1")
 
 # ============================================================
-# 网易 126 IMAP 配置
+# Gmail IMAP 配置
 # ============================================================
-IMAP_SERVER = "imap.126.com"
+IMAP_SERVER = "imap.gmail.com"
 IMAP_PORT = 993
 
 
@@ -107,17 +106,14 @@ def fetch_emails_for_date(target_date):
     date_str = target_date.strftime("%d-%b-%Y")
     date_iso = target_date.strftime("%Y-%m-%d")
 
-    if "你的126" in EMAIL_ACCOUNT:
-        print("[错误] 请先在脚本开头填写 EMAIL_ACCOUNT 和 EMAIL_PASSWORD。")
+    if not EMAIL_ACCOUNT or not EMAIL_PASSWORD:
+        print("[错误] 请通过环境变量 EMAIL_ACCOUNT 和 EMAIL_PASSWORD 设置 Gmail 账号和应用专用密码。")
         sys.exit(1)
 
     # --- 连接 ---
     print(f"[连接] {IMAP_SERVER}:{IMAP_PORT} ...")
     try:
-        ssl_ctx = ssl.create_default_context()
-        ssl_ctx.check_hostname = False
-        ssl_ctx.verify_mode = ssl.CERT_NONE
-        conn = imaplib.IMAP4_SSL(IMAP_SERVER, IMAP_PORT, ssl_context=ssl_ctx)
+        conn = imaplib.IMAP4_SSL(IMAP_SERVER, IMAP_PORT)
     except Exception as e:
         print(f"[错误] 连接失败: {e}")
         sys.exit(1)
@@ -128,19 +124,10 @@ def fetch_emails_for_date(target_date):
         conn.login(EMAIL_ACCOUNT, EMAIL_PASSWORD)
     except imaplib.IMAP4.error as e:
         print(f"[错误] 登录失败: {e}")
-        print("  提示：126 邮箱需使用「客户端授权码」而非登录密码。")
+        print("  提示：Gmail 需使用「应用专用密码」而非登录密码。")
+        print("  开启步骤：Gmail 设置 → 安全性 → 两步验证 → 应用专用密码")
         conn.logout()
         sys.exit(1)
-
-    # --- IMAP ID 命令（网易强制要求）---
-    imaplib.Commands['ID'] = ('AUTH', 'SELECTED')
-    try:
-        conn._simple_command(
-            'ID',
-            '("name" "fetch_126_email" "version" "2.0" "vendor" "Python-imaplib" "support-email" "' + EMAIL_ACCOUNT + '")'
-        )
-    except Exception:
-        pass
 
     # --- 选择收件箱 ---
     status, _ = conn.select("INBOX")
@@ -227,7 +214,7 @@ def fetch_emails_for_date(target_date):
         try:
             req = urllib.request.Request(xlsx_url, headers={
                 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
-                'Referer': 'https://mail.126.com/',
+                'Referer': 'https://mail.google.com/',
             })
             resp = urllib.request.urlopen(req, timeout=30)
             content = resp.read()
