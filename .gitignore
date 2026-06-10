@@ -1,0 +1,33 @@
+# 生成的报告文件
+*.docx
+【*.md
+
+# 日志
+daily_log.txt
+
+# 邮件原始数据
+raw_email_*.html
+raw_email_*.txt
+raw_email_body.html
+raw_email_body_parsed.json
+raw_email_today.txt
+
+# 测试脚本
+test_*.py
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+
+# IDE
+.vscode/
+.idea/
+.claude/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Credentials (安全兜底)
+*.env
