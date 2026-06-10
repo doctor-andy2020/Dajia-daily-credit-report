@@ -1,37 +1,27 @@
-name: 大家资产每日舆情日报
+name: Dajia Daily Credit Report
 
 on:
   schedule:
-    # 北京时间每个工作日 9:00 (UTC 1:00)
     - cron: "0 1 * * 1-5"
-  workflow_dispatch:  # 允许手动触发
+  workflow_dispatch:
 
 jobs:
-  generate-and-send:
+  daily:
     runs-on: ubuntu-latest
     timeout-minutes: 10
-
     steps:
-      - name: 检出代码
-        uses: actions/checkout@v4
-
-      - name: 设置 Python
-        uses: actions/setup-python@v5
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
-
-      - name: 安装依赖
-        run: pip install -r requirements.txt
-
-      - name: 运行每日流水线
+      - run: pip install -r requirements.txt
+      - name: Run daily pipeline
         env:
           EMAIL_ACCOUNT: ${{ secrets.EMAIL_ACCOUNT }}
           EMAIL_PASSWORD: ${{ secrets.EMAIL_PASSWORD }}
           EMAIL_RECIPIENTS: ${{ secrets.EMAIL_RECIPIENTS }}
         run: python daily_runner.py
-
-      - name: 上传报告（备份）
-        uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v4
         if: always()
         with:
           name: daily-report
