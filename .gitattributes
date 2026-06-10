@@ -1,0 +1,9 @@
+# 强制 GitHub Actions workflow 使用 LF 换行符（否则 Actions 无法解析）
+.github/workflows/*.yml text eol=lf
+*.py text eol=lf
+*.sh text eol=lf
+*.txt text eol=lf
+*.md text eol=lf
+*.json text eol=lf
+*.bat text eol=crlf
+*.ps1 text eol=crlf
