@@ -2,9 +2,7 @@ name: Dajia Daily Credit Report
 
 on:
   schedule:
-    # 北京时间每个工作日 09:07 (UTC 01:07)
-    # 避开整点高峰期，避免 GitHub Actions 调度延迟
-    - cron: "7 1 * * 1-5"
+    - cron: '7 1 * * 1-5'
   workflow_dispatch:
 
 jobs:
