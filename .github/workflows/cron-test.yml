@@ -2,11 +2,11 @@ name: Cron Test
 
 on:
   schedule:
-    - cron: '25 14 * * 1-5'
+    - cron: '00 14 * * *'
   workflow_dispatch:
 
 jobs:
   test:
     runs-on: ubuntu-latest
     steps:
-      - run: echo "cron working $(date)"
+      - run: echo "schedule works $(date)"
