@@ -2,14 +2,11 @@ name: Cron Test
 
 on:
   schedule:
-    # 测试1: 北京时间 20:55 (UTC 12:55)
-    - cron: "55 12 * * 1-5"
-    # 测试2: 北京时间 21:15 (UTC 13:15)
-    - cron: "15 13 * * 1-5"
+    - cron: '25 14 * * 1-5'
   workflow_dispatch:
 
 jobs:
   test:
     runs-on: ubuntu-latest
     steps:
-      - run: echo "✅ Cron is working! $(date -u)"
+      - run: echo "cron working $(date)"
