@@ -113,6 +113,10 @@ def main():
         dm_cmd = f'{sys.executable} "{dm_runner}"'
         if force_run:
             dm_cmd += " --force"
+        # Use the most recent target date for DM article search
+        if target_dates:
+            dm_target = target_dates[0].strftime('%Y-%m-%d')
+            dm_cmd += f" --date {dm_target}"
         if run_step("Step 4: DM 早报提取与 DOCX 生成", dm_cmd):
             # Find the generated DM DOCX
             dm_files = sorted(BASE_DIR.glob('DM信用早报_*.docx'))
