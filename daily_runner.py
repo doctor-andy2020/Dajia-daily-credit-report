@@ -53,9 +53,19 @@ def main():
     print(f"  拉取日期：{', '.join(d.strftime('%Y-%m-%d') for d in target_dates)}")
     print("=" * 60)
 
-    if not target_dates:
-        print("[跳过] 周末不执行。")
+    force_run = "--force" in sys.argv or "--force-weekend" in sys.argv
+
+    if not target_dates and not force_run:
+        print("[跳过] 周末不执行（使用 --force 强制运行）。")
         sys.exit(0)
+
+    if force_run and not target_dates:
+        print("[强制模式] 周末运行，拉取最近一个工作日数据。")
+        # Find last weekday
+        d = today
+        while d.weekday() >= 5:
+            d = d - datetime.timedelta(days=1)
+        target_dates = [d]
 
     fetch_script = BASE_DIR / 'fetch_126_email.py'
     if not fetch_script.exists():
@@ -96,14 +106,32 @@ def main():
         print("[错误] 报告生成失败")
         sys.exit(1)
 
-    # Step 4: 发送邮件
+    # Step 4: DM 早报提取与生成
+    dm_runner = BASE_DIR / 'dm_daily.py'
+    dm_docx = None
+    if dm_runner.exists():
+        dm_cmd = f'{sys.executable} "{dm_runner}"'
+        if force_run:
+            dm_cmd += " --force"
+        if run_step("Step 4: DM 早报提取与 DOCX 生成", dm_cmd):
+            # Find the generated DM DOCX
+            dm_files = sorted(BASE_DIR.glob('DM信用早报_*.docx'))
+            if dm_files:
+                dm_docx = dm_files[-1]
+                print(f"[信息] DM 早报 DOCX: {dm_docx}")
+    else:
+        print("[警告] 找不到 dm_daily.py，跳过 DM 早报")
+
+    # Step 5: 发送邮件
     md_file = list(BASE_DIR.glob('【大家资产持仓信用主体舆情日报】_*.md'))
     if md_file:
         md_file = sorted(md_file)[-1]
         send_script = BASE_DIR / 'send_report_email.py'
         if send_script.exists():
-            run_step("Step 4: 发送报告邮件",
-                     f'{sys.executable} "{send_script}" "{md_file}"')
+            cmd = f'{sys.executable} "{send_script}" "{md_file}"'
+            if dm_docx:
+                cmd += f' --attach "{dm_docx}"'
+            run_step("Step 5: 发送报告邮件", cmd)
         else:
             print("[警告] 找不到 send_report_email.py，跳过邮件发送")
     else:
@@ -112,6 +140,8 @@ def main():
     print()
     print("=" * 60)
     print("  完成！报告已生成（MD + DOCX 双格式）并发送邮件。")
+    if dm_docx:
+        print(f"  DM 早报附件：{dm_docx.name}")
     print("=" * 60)
 
 

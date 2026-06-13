@@ -4,23 +4,36 @@ on:
   schedule:
     - cron: '7 1 * * 1-5'
   workflow_dispatch:
+    inputs:
+      force:
+        description: 'Force run (bypass weekend check)'
+        type: boolean
+        default: false
 
 jobs:
   daily:
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
       - run: pip install -r requirements.txt
+      - run: python -m playwright install chromium
       - name: Run daily pipeline
         env:
           EMAIL_ACCOUNT: ${{ secrets.EMAIL_ACCOUNT }}
           EMAIL_PASSWORD: ${{ secrets.EMAIL_PASSWORD }}
           EMAIL_RECIPIENTS: ${{ secrets.EMAIL_RECIPIENTS }}
-        run: python daily_runner.py
+          DM_USER: ${{ secrets.DM_USER }}
+          DM_PASS: ${{ secrets.DM_PASS }}
+        run: |
+          if [[ "${{ github.event_name }}" == "workflow_dispatch" && "${{ inputs.force }}" == "true" ]]; then
+            python daily_runner.py --force
+          else
+            python daily_runner.py
+          fi
       - uses: actions/upload-artifact@v4
         if: always()
         with:
@@ -28,4 +41,5 @@ jobs:
           path: |
             【大家资产持仓信用主体舆情日报】_*.md
             【大家资产持仓信用主体舆情日报】_*.docx
+            DM信用早报_*.docx
           retention-days: 7

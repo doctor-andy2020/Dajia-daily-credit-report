@@ -61,8 +61,30 @@ def md_to_html(md_path):
     return styled_html
 
 
-def send_report(md_path, recipients=None):
-    """发送报告邮件"""
+def attach_file(msg, filepath, display_name=None):
+    """Attach a file to the email message."""
+    filepath = Path(filepath)
+    if not filepath.exists():
+        print(f"[警告] 附件不存在: {filepath}")
+        return
+    with open(filepath, 'rb') as f:
+        attachment = MIMEBase('application', 'vnd.openxmlformats-officedocument.wordprocessingml.document')
+        attachment.set_payload(f.read())
+        encoders.encode_base64(attachment)
+        filename = display_name or filepath.name
+        attachment.add_header('Content-Disposition', 'attachment', filename=('utf-8', '', filename))
+        msg.attach(attachment)
+    print(f"[附件] {filepath.name}")
+
+
+def send_report(md_path, recipients=None, extra_attachments=None):
+    """发送报告邮件
+
+    Args:
+        md_path: 报告MD文件路径
+        recipients: 收件人列表
+        extra_attachments: 额外附件文件路径列表 (如 DM 早报 DOCX)
+    """
     if recipients is None:
         recipients = RECIPIENTS
 
@@ -92,18 +114,15 @@ def send_report(md_path, recipients=None):
     # HTML正文
     msg.attach(MIMEText(html_body, 'html', 'utf-8'))
 
-    # DOCX附件
+    # DOCX附件（主报告）
     if docx_path.exists():
-        with open(docx_path, 'rb') as f:
-            attachment = MIMEBase('application', 'vnd.openxmlformats-officedocument.wordprocessingml.document')
-            attachment.set_payload(f.read())
-            encoders.encode_base64(attachment)
-            attachment.add_header(
-                'Content-Disposition',
-                'attachment',
-                filename=('utf-8', '', f'【大家资产持仓信用主体舆情日报】{report_date}.docx')
-            )
-            msg.attach(attachment)
+        attach_file(msg, docx_path, f'【大家资产持仓信用主体舆情日报】{report_date}.docx')
+
+    # 额外附件（DM早报等）
+    if extra_attachments:
+        for att in extra_attachments:
+            if isinstance(att, (str, Path)):
+                attach_file(msg, Path(att))
 
     # 发送 (Gmail 用 STARTTLS)
     try:
@@ -121,15 +140,20 @@ def send_report(md_path, recipients=None):
 
 
 if __name__ == '__main__':
-    if len(sys.argv) < 2:
+    import argparse
+    ap = argparse.ArgumentParser(description="发送舆情日报邮件")
+    ap.add_argument("md_file", nargs="?", help="报告MD文件路径")
+    ap.add_argument("--attach", action="append", default=[], help="额外附件文件路径（可多次指定）")
+    args = ap.parse_args()
+
+    md_file = args.md_file
+    if not md_file:
         # 尝试找当天的报告
         today = datetime.date.today().strftime('%Y-%m-%d')
         md_file = f'【大家资产持仓信用主体舆情日报】_{today}.md'
         if not Path(md_file).exists():
-            print(f"用法: python {sys.argv[0]} <报告MD文件路径>")
-            print(f"示例: python {sys.argv[0]} 大家资产持仓信用主体舆情日报_2026-05-29.md")
+            print(f"用法: python {sys.argv[0]} <报告MD文件路径> [--attach 附件]")
+            print(f"示例: python {sys.argv[0]} 大家资产持仓信用主体舆情日报_2026-05-29.md --attach DM信用早报_20260529.docx")
             sys.exit(1)
-    else:
-        md_file = sys.argv[1]
 
-    send_report(md_file)
+    send_report(md_file, extra_attachments=args.attach)
