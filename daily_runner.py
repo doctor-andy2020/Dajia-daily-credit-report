@@ -110,9 +110,7 @@ def main():
     dm_runner = BASE_DIR / 'dm_daily.py'
     dm_docx = None
     if dm_runner.exists():
-        dm_cmd = f'{sys.executable} "{dm_runner}"'
-        if force_run:
-            dm_cmd += " --force"
+        dm_cmd = f'{sys.executable} "{dm_runner}" --force'
         # Use the most recent target date for DM article search
         if target_dates:
             dm_target = target_dates[0].strftime('%Y-%m-%d')
