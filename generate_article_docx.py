@@ -70,8 +70,8 @@ def read_and_clean(path):
         "中华人民共和国",
     }
 
-    # DM信用早报 header artifacts
-    ZAOBAO_HEADER_SKIP = {"来源：DM AI舆情查看原链接", "标签  债市速览", "收藏"}
+    # DM信用早报 header artifacts (these are UI elements, not content)
+    ZAOBAO_HEADER_SKIP = {"收藏"}
 
     cleaned = []
     for line in content:
@@ -98,9 +98,11 @@ def read_and_clean(path):
         if article_type == "zaobao":
             if s in ZAOBAO_HEADER_SKIP:
                 continue
-            if s.startswith("来源：") or s.startswith("标签  "):
-                continue
+            # Keep "来源：" and "标签  " lines — parse_sections needs them
             if re.match(r"^字号\s*$", s):
+                continue
+            # Skip the "来源：DM AI舆情查看原链接" line
+            if s.startswith("来源：") and "查看原链接" in s:
                 continue
 
         # Skip .xlsx file links
@@ -131,45 +133,219 @@ ZAOBAO_SECTIONS = [
 ]
 ZAOBAO_SUBS = ["国内", "地方", "海外", "地产", "城投", "其它"]
 
-# Content-start markers (paragraph is content, not a new title)
+# Content-start markers — patterns that reliably indicate a line is
+# ELABORATION/CONTENT, NOT a new news headline.
+# IMPORTANT: do NOT include bare entity names (中国央行, 北京, 上海, etc.)
+# as those will absorb unrelated headlines starting with the same entity.
 CONTENT_STARTERS = [
     "据", "根据", "数据显示", "数据显",
     "新华社", "央视新闻", "中新社", "中新网", "人民日报",
     "当地时间", "此前", "此前一天", "同日", "另据",
     "公告显示", "公告显", "募集说", "上述", "该", "此次", "本次",
-    "目前", "截至", "其中", "具体", "近日",
+    "目前", "截至", "其中", "具体", "近日", "此外", "同时", "另外",
     "综合新华社", "路透社",
     "周五", "周六", "周日", "周一", "周二", "周三", "周四",
     "以下简称", "截至发稿", "据中国",
-    # Chinese entity/org continuation patterns
-    "中国央行", "中国人民", "中国", "北京", "上海", "深圳",
-    "欧洲央行", "欧央行", "美国", "韩国央行", "日本央行",
-    "彭博", "路透", "伊通社", "伊媒", "美伊", "美媒",
+    # Purpose-clause openers — common in policy/regulation content paragraphs
+    # that elaborate on the title's announcement
+    "为贯彻", "为贯彻落实", "为规范", "为促进", "为落实",
+    "为加强", "为推动", "为进一步", "为更好", "为切实",
+    "为深入", "为加快", "为保障", "为支持", "为引导",
+    # Reporting-continuation patterns
+    "修订说明指出", "修订说明", "修订后的",
+]
+
+# Reporting-verb suffixes — if an entity name ends with one of these
+# followed by ：or , the line is a content/reporting clause, not a title.
+# e.g. "中国央行数据显示，" → content  (ends with 显示)
+#      "中国央行：M2增长..."   → title   (entity + ：without reporting verb)
+REPORTING_VERBS = [
+    "显示", "公布", "发布", "报道", "称", "表示", "公告",
+    "指出", "强调", "披露", "透露", "介绍", "回应", "公布",
+    "宣布", "声明", "通知", "通报",
+]
+
+# Title-indicator words — if a line starts with one of these, it is almost
+# certainly a new headline, not content continuation.
+TITLE_STARTERS = [
+    "穆迪：", "惠誉：", "标普：", "中诚信：", "联合资信：", "大公：",
+    "穆迪上调", "穆迪下调", "惠誉上调", "惠誉下调", "标普上调", "标普下调",
+    "中诚信上调", "中诚信下调",
 ]
 
 
+def _find_colon(text, max_pos=30):
+    """Return position of first ：or : in text[:max_pos], or -1 if none."""
+    for i, ch in enumerate(text):
+        if i >= max_pos:
+            break
+        if ch in ("：", ":"):
+            return i
+    return -1
+
+
+def _has_reporting_verb_before_colon(text, colon_pos):
+    """Check if entity-name before colon ends with a reporting verb."""
+    before = text[:colon_pos]
+    return any(before.endswith(v) for v in REPORTING_VERBS)
+
+
+def _same_topic(text, title, min_common=8):
+    """Check if `text` elaborates on the same news topic as `title`.
+
+    Both text and title are assumed to start with the same entity prefix
+    (e.g. both start with "中国央行：").  Returns True if they share enough
+    initial content to be considered the same news item.
+    """
+    # Compare the bodies (after ：/：)
+    t_colon = _find_colon(title, 25)
+    c_colon = _find_colon(text, 25)
+    if t_colon < 0 or c_colon < 0:
+        return False
+    title_body = title[t_colon + 1:].strip()
+    text_body = text[c_colon + 1:].strip()
+    if not title_body or not text_body:
+        return False
+    # Count matching chars at start of body
+    check_len = min(len(title_body), len(text_body), min_common)
+    if check_len < 4:
+        return False
+    matches = sum(1 for i in range(check_len)
+                  if title_body[i] == text_body[i])
+    return matches >= check_len * 0.6  # ≥60% char overlap → same topic
+
+
 def is_content_line(text, title_text=""):
-    """Check if text looks like a content/follow-up paragraph, not a new title."""
+    """Check if text looks like a content/follow-up paragraph, not a new title.
+
+    Key heuristic:
+    - "EntityName：statement" (entity + ：without reporting verb) → TITLE
+      UNLESS it shares the same topic as title_text (then it's CONTENT).
+    - "EntityName数据显示，" (entity + reporting verb + ，) → CONTENT
+    - Lines starting with 据/根据/新华社 etc. → CONTENT
+    """
     text = text.strip()
     if not text:
         return False
-    # Pattern 1: starts with content marker
+
+    # ── Strong TITLE indicators (check first — these are NEVER content) ──
+    # 1. Starts with rating agency + ：pattern
+    for ts in TITLE_STARTERS:
+        if text.startswith(ts):
+            return False
+
+    # ── CONTENT indicators ──
+    # Pattern 1: starts with known content/elaboration marker
     for marker in CONTENT_STARTERS:
         if text.startswith(marker):
             return True
-    # Pattern 2: shares entity prefix with previous title (continuation)
-    if title_text and len(title_text) >= 2:
-        sep = next((c for c in ["：", ":", "，", "、", "（"] if c in title_text[:15]), None)
-        if sep:
-            prefix = title_text.split(sep)[0]
-            if len(prefix) >= 2 and text.startswith(prefix):
-                return True
-        else:
-            # Try matching first 2-4 chars as shared entity prefix
-            for n in [4, 3, 2]:
-                prefix = title_text[:n]
-                if text.startswith(prefix):
+
+    # Pattern 1b: starts with a date — content elaboration
+    # e.g. "6月11日，欧洲央行宣布..."
+    if re.match(r'^\d{1,2}月\d{1,2}日', text):
+        return True
+
+    # Pattern 2: contains reporting-verb + continuation in first 55 chars
+    # e.g. "中国央行数据显示，" / "中国人民银行发布关于..."
+    # The verb may be followed by punctuation (：:,，), whitespace, or
+    # common clause-starters (关于, 对, 为, 将, 拟, 的, 了).
+    m = re.search(r'(显示|公布|发布|报道|称|表示|公告|指出|强调|披露|透露|介绍|回应)[：:,，\s关于对为将拟的了]', text[:55])
+    if m:
+        entity_part = text[:m.start()]
+        if len(entity_part) < 20:
+            return True
+
+    # Pattern 2b: shares a 《...》 document reference with the title
+    # e.g. Title: "中基协修订发布《基金经理兼任...工作指引》"
+    #      Text:  "为贯彻落实...对《基金经理兼任...工作指引》进行修订..."
+    if title_text:
+        title_refs = re.findall(r'《([^》]+)》', title_text)
+        if title_refs:
+            for ref in title_refs:
+                if len(ref) >= 6 and ref in text:
                     return True
+
+    # Pattern 2c: shares key topic phrase with title (≥6 common chars)
+    # e.g. Title: "石澳道14号豪宅以5.63亿港元易手"
+    #      Text:  "香港石澳一处历史悠久的洋房以5.63亿港元售出..."
+    # IMPORTANT: if the title uses 《...》 to name a document, ONLY Pattern 2b
+    # (exact doc name match) can confirm continuation — fuzzy phrase matching
+    # could match a DIFFERENT document with a similar name.
+    _title_has_book = '《' in title_text if title_text else False
+    if title_text and len(title_text) >= 8 and not _title_has_book:
+        for window in range(min(15, len(title_text)), 6, -1):
+            for start in range(0, len(title_text) - window + 1):
+                chunk = title_text[start:start + window]
+                if chunk not in text:
+                    continue
+                if chunk[0] in '，。、：；（）':
+                    continue
+                if '《' in chunk or '》' in chunk:
+                    continue
+                tpos = text.index(chunk)
+                # Skip chunks at position 0 in both if too long — shared
+                # opening that could be same entity but different docs.
+                if start == 0 and tpos == 0 and window > 10:
+                    continue
+                return True
+
+    # ── Same-topic continuation (BEFORE ：title check) ──
+    # Pattern 3: shares entity+topic with the current title.
+    # "中国央行：M2增长8.6%。M1增长5.5%。" is content of
+    # "中国央行：M2余额353.67万亿元" — same entity, same topic.
+    if title_text and len(title_text) >= 3:
+        t_colon = _find_colon(title_text, 25)
+        c_colon = _find_colon(text, 25)
+        # Both have ：at headline position with the same entity?
+        if (t_colon > 0 and c_colon > 0
+                and t_colon < 25 and c_colon < 25):
+            title_entity = title_text[:t_colon]
+            text_entity = text[:c_colon]
+            if (len(title_entity) >= 2
+                    and title_entity == text_entity
+                    and not _has_reporting_verb_before_colon(text, c_colon)):
+                # Same entity, both have ：→ check if same topic
+                if _same_topic(text, title_text, min_common=8):
+                    return True
+
+    # ── TITLE-indicator: ：without reporting verb ──
+    # After same-topic check above, a line with ：in headline position
+    # that is NOT about the same topic is a NEW title.
+    colon = _find_colon(text, 30)
+    if colon > 0 and colon < 25:
+        if not _has_reporting_verb_before_colon(text, colon):
+            return False
+
+    # ── Remaining prefix matching ──
+    # Pattern 4: shares entity prefix with title (no ：in either)
+    #
+    # IMPORTANT: when the title contains 《...》, prefix matching is
+    # suppressed — different docs from the same entity can share the
+    # same opening (e.g. "中基协发布《基金A》" vs "中基协发布《基金B》").
+    # Only Pattern 2b (exact doc name) can confirm same-topic for 《 titles.
+    _title_has_book = '《' in title_text if title_text else False
+    if title_text and len(title_text) >= 3 and not _title_has_book:
+        t_colon2 = _find_colon(title_text, 25)
+        if t_colon2 > 0:
+            title_entity = title_text[:t_colon2]
+            if len(title_entity) >= 2 and text.startswith(title_entity):
+                if len(text) > len(title_text) * 0.7:
+                    return True
+        else:
+            # Title has no colon — try prefix match with descending length.
+            for n in [8, 6, 4]:
+                if len(title_text) >= n:
+                    prefix = title_text[:n]
+                    if text.startswith(prefix):
+                        return True
+                else:
+                    break
+            # Last resort: 3-char entity prefix for very short titles,
+            # but only if text is clearly longer (elaboration, not headline)
+            if len(title_text) >= 3 and len(text) > len(title_text) * 1.3:
+                if text.startswith(title_text[:3]):
+                    return True
+
     return False
 
 
@@ -192,7 +368,13 @@ def parse_sections(lines, article_type):
     while i < len(lines):
         s = lines[i].strip()
         if s and ("要闻速览" in s or "信用早报" in s or "早报" in s):
-            article["title"] = s
+            # Truncate at | — keep only "DM信用早报0615" (zaobao)
+            # or "债市要闻速览0612" (yaowen). The post-pipe content
+            # is a summary of the day's headlines, not the title.
+            if "|" in s:
+                article["title"] = s.split("|")[0].strip()
+            else:
+                article["title"] = s
             i += 1
             break
         i += 1
@@ -203,13 +385,29 @@ def parse_sections(lines, article_type):
         i += 1
 
     # ── Skip header meta (来源, 收藏, 标签, 字号, etc.) ──
-    while i < len(lines):
+    # Only look ahead a limited number of lines to find the tag.
+    SKIP_META = {
+        "收藏", "来源：DM AI舆情查看原链接",
+    }
+    _tag_scan = 0
+    while i < len(lines) and _tag_scan < 15:
         s = lines[i].strip()
         if s.startswith("标签") and "标签" in s:
             article["tags"] = s.replace("标签", "").strip()
             i += 1
             break
+        if s in SKIP_META or s.startswith("来源："):
+            i += 1
+            _tag_scan += 1
+            continue
+        # Stop scanning if we hit a section header or non-meta content
+        if s in ZAOBAO_SECTIONS or (article_type == "yaowen" and s.startswith("【")):
+            break
+        if s and not s.startswith("字号") and not re.match(r"^(小|中|大)$", s):
+            # Non-meta content — stop scanning
+            break
         i += 1
+        _tag_scan += 1
 
     # ── Skip to first content section ──
     while i < len(lines):
