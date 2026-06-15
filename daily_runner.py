@@ -111,10 +111,13 @@ def main():
     dm_docx = None
     if dm_runner.exists():
         dm_cmd = f'{sys.executable} "{dm_runner}" --force'
-        # Use the most recent target date for DM article search
-        if target_dates:
-            dm_target = target_dates[0].strftime('%Y-%m-%d')
-            dm_cmd += f" --date {dm_target}"
+        # DM only publishes on weekdays. Always use today (or today is
+        # a weekend, find the most recent weekday) — not target_dates[0]
+        # which might be Saturday when running on Monday.
+        dm_target_date = today
+        while dm_target_date.weekday() >= 5:
+            dm_target_date = dm_target_date - dt.timedelta(days=1)
+        dm_cmd += f" --date {dm_target_date.strftime('%Y-%m-%d')}"
         if run_step("Step 4: DM 早报提取与 DOCX 生成", dm_cmd):
             # Find the generated DM DOCX
             dm_files = sorted(BASE_DIR.glob('DM信用早报_*.docx'))
