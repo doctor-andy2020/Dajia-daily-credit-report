@@ -54,46 +54,69 @@ def main():
     txt_file = BASE_DIR / f"dm_article_{datestr}.txt"
     docx_file = BASE_DIR / f"DM早报_{datestr}.docx"
 
-    # Step A: Extract article from DM
+    # Step A: Extract ALL articles from DM (信用早报 + 要闻速览)
     if not args.skip_extract:
         ok = run_step(
-            f"Step A: 从 DM 提取 {date_str} 早报",
-            f'{sys.executable} "{BASE_DIR}/dm_pipeline.py" --date {date_str}'
+            f"Step A: 从 DM 提取 {date_str} 早报（含信用早报+要闻速览）",
+            f'{sys.executable} "{BASE_DIR}/dm_pipeline.py" --date {date_str} --all'
         )
         if not ok:
-            # Check if we have a cached txt file
-            if txt_file.exists():
-                print(f"[警告] 提取失败，使用缓存文件: {txt_file}")
-            else:
+            # Check if we have any cached txt files
+            has_cache = False
+            for pattern in [f"dm_zaobao_{datestr}.txt", f"dm_yaowen_{datestr}.txt",
+                            f"dm_article_{datestr}.txt", "dm_article_output.txt"]:
+                if (BASE_DIR / pattern).exists():
+                    has_cache = True
+                    break
+            if not has_cache:
                 print("[错误] DM 早报提取失败，且无缓存文件。")
                 sys.exit(1)
+            print(f"[警告] 提取部分失败，使用已有缓存文件。")
 
-    # Update txt_file reference (dm_pipeline.py may have saved to default name)
+    # Find all extracted txt files
+    zaobao_txt = BASE_DIR / f"dm_zaobao_{datestr}.txt"
+    yaowen_txt = BASE_DIR / f"dm_yaowen_{datestr}.txt"
+    article_txt = BASE_DIR / f"dm_article_{datestr}.txt"
     default_txt = BASE_DIR / "dm_article_output.txt"
-    pipeline_txt = BASE_DIR / f"dm_article_{datestr}.txt"
-    actual_txt = None
-    for f in [pipeline_txt, default_txt, txt_file]:
-        if f.exists():
-            actual_txt = f
-            break
 
-    if not actual_txt:
+    txt_files = []  # list of (txt_path, docx_path, label)
+    if zaobao_txt.exists():
+        txt_files.append((zaobao_txt, BASE_DIR / f"DM早报_{datestr}.docx", "DM信用早报"))
+    if yaowen_txt.exists():
+        txt_files.append((yaowen_txt, BASE_DIR / f"DM要闻速览_{datestr}.docx", "债市要闻速览"))
+    # Fallback: old naming convention
+    if not txt_files:
+        for f in [article_txt, default_txt]:
+            if f.exists():
+                txt_files.append((f, docx_file, "DM早报"))
+                break
+
+    if not txt_files:
         print("[错误] 找不到 DM 文章文本文件。")
         sys.exit(1)
 
-    print(f"[信息] 使用文章文件: {actual_txt}")
+    print(f"[信息] 找到 {len(txt_files)} 篇文章: {', '.join(t[2] for t in txt_files)}")
 
-    # Step B: Generate DOCX
-    ok = run_step(
-        f"Step B: 生成 DOCX",
-        f'{sys.executable} "{BASE_DIR}/generate_article_docx.py" "{actual_txt}" -o "{docx_file}"'
-    )
-    if not ok:
-        print("[错误] DOCX 生成失败。")
+    # Step B: Generate DOCX for each article
+    generated_files = []
+    for txt_path, docx_path, label in txt_files:
+        ok = run_step(
+            f"Step B: 生成 {label} DOCX",
+            f'{sys.executable} "{BASE_DIR}/generate_article_docx.py" "{txt_path}" -o "{docx_path}"'
+        )
+        if ok:
+            generated_files.append(docx_path)
+        else:
+            print(f"[错误] {label} DOCX 生成失败: {docx_path}")
+
+    if not generated_files:
+        print("[错误] 所有 DOCX 生成均失败。")
         sys.exit(1)
 
+    # Print generated files
     print(f"\n{'='*60}")
-    print(f"  完成！DM 早报 DOCX: {docx_file}")
+    for docx_path in generated_files:
+        print(f"  完成！DM早报 DOCX: {docx_path}")
     print(f"{'='*60}")
 
 

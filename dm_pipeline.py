@@ -53,10 +53,15 @@ def build_keywords(target_date=None, explicit=None):
     return unique
 
 
-async def extract_article(keywords, output_file=None):
+async def extract_article(keywords, output_file=None, find_all=False, datestr=None):
     """Login to DM, search for article matching any keyword, save to file.
 
-    Returns (success: bool, article_title: str, file_path: str, char_count: int)
+    If find_all=True, extract ALL matching articles and return a list.
+    Otherwise, extract only the first match.
+
+    Returns:
+        Single result: (success: bool, article_title: str, file_path: str, char_count: int)
+        List result:   [(success, title, filepath, char_count), ...]
     """
     async with async_playwright() as p:
         browser = await p.chromium.launch(headless=True)
@@ -121,56 +126,70 @@ async def extract_article(keywords, output_file=None):
 
         print(f"[4] {len(articles)} articles from API")
 
-        # Step 4: Search for article matching keywords
-        target_id = None
-        matched_kw = ""
+        # Step 4: Search for articles matching keywords (collect ALL)
+        matched = []  # list of (sentimentId, matched_kw, title)
+        seen_ids = set()
         for kw in keywords:
             for a in articles:
                 title = a.get("title", "") or a.get("sentimentTitle", "")
                 sid = a.get("sentimentId", "")
-                if sid and kw in title:
-                    target_id = sid
-                    matched_kw = kw
+                if sid and sid not in seen_ids and kw in title:
+                    matched.append((sid, kw, title))
+                    seen_ids.add(sid)
                     print(f"    MATCHED '{kw}': {sid} = {title[:100]}")
-                    break
-            if target_id:
-                break
 
-        if not target_id:
+        if not matched:
             print("    Target not found. Available titles:")
             for a in articles[:20]:
                 title = a.get("title", "") or a.get("sentimentTitle", "")
                 sid = a.get("sentimentId", "")
                 print(f"      {sid}: {title[:120]}")
             await browser.close()
+            if find_all:
+                return []
             return False, "", "", 0
 
-        # Step 5: Open article detail
-        print(f"\n[5] Opening article {target_id}...")
-        await frame.evaluate(
-            f"window.location.hash = '#/bond/sentiment-news-detail/area-news/{target_id}'"
-        )
-        await page.wait_for_timeout(10000)
-        body = await frame.locator("body").inner_text()
+        if not find_all:
+            matched = matched[:1]
 
-        # Step 6: Save
-        article_title = ""
-        for a in articles:
-            sid = a.get("sentimentId", "")
-            if sid == target_id:
-                article_title = a.get("title", "") or a.get("sentimentTitle", "")
-                break
+        # Step 5: Extract each matched article
+        results = []
+        for idx, (target_id, matched_kw, article_title) in enumerate(matched):
+            print(f"\n[5.{idx+1}/{len(matched)}] Opening article {target_id} — {article_title[:80]}")
+            await frame.evaluate(
+                f"window.location.hash = '#/bond/sentiment-news-detail/area-news/{target_id}'"
+            )
+            await page.wait_for_timeout(10000)
+            body = await frame.locator("body").inner_text()
 
-        if output_file is None:
-            output_file = os.path.join(OUT, "dm_article_output.txt")
+            # Determine output filename
+            if find_all and len(matched) > 1:
+                # Auto-name by article type
+                if "要闻速览" in article_title:
+                    fname = f"dm_yaowen_{datestr}.txt" if datestr else "dm_yaowen_output.txt"
+                elif "信用早报" in article_title or "早报" in article_title:
+                    fname = f"dm_zaobao_{datestr}.txt" if datestr else "dm_zaobao_output.txt"
+                else:
+                    fname = output_file or f"dm_article_{datestr}_{idx}.txt" if datestr else f"dm_article_output_{idx}.txt"
+                filepath = os.path.join(OUT, fname)
+            elif output_file:
+                filepath = output_file
+            elif datestr:
+                filepath = os.path.join(OUT, f"dm_article_{datestr}.txt")
+            else:
+                filepath = os.path.join(OUT, "dm_article_output.txt")
 
-        with open(output_file, "w", encoding="utf-8") as f:
-            f.write(body)
-        print(f"[6] Saved: {output_file} ({len(body)} chars)")
-        print(f"    Title: {article_title}")
+            with open(filepath, "w", encoding="utf-8") as f:
+                f.write(body)
+            print(f"[6.{idx+1}] Saved: {filepath} ({len(body)} chars)")
+
+            results.append((True, article_title, filepath, len(body)))
 
         await browser.close()
-        return True, article_title, output_file, len(body)
+
+        if find_all:
+            return results
+        return results[0] if results else (False, "", "", 0)
 
 
 def main():
@@ -178,6 +197,8 @@ def main():
     parser.add_argument("--date", help="Target date (YYYY-MM-DD), default=today")
     parser.add_argument("--keyword", help="Explicit search keyword (overrides date)")
     parser.add_argument("--output", help="Output file path")
+    parser.add_argument("--all", dest="find_all", action="store_true",
+                        help="Extract ALL matching articles (信用早报 + 要闻速览)")
     args = parser.parse_args()
 
     target_date = None
@@ -189,28 +210,49 @@ def main():
         date_str = target_date.strftime("%Y-%m-%d")
 
     keywords = build_keywords(target_date, args.keyword)
+    datestr = target_date.strftime("%Y%m%d")
     print(f"Date: {date_str}  |  Keywords: {keywords}")
 
     if args.output:
         output_file = args.output
     else:
-        output_file = os.path.join(OUT, f"dm_article_{target_date.strftime('%Y%m%d')}.txt")
+        output_file = os.path.join(OUT, f"dm_article_{datestr}.txt")
 
-    success, title, fpath, chars = asyncio.run(extract_article(keywords, output_file))
+    result = asyncio.run(extract_article(
+        keywords, output_file, find_all=args.find_all, datestr=datestr))
 
-    if success:
-        print(f"\n[DONE] {title} ({chars} chars)")
-        print(f"File: {fpath}")
-        # Write success marker for CI
+    if args.find_all:
+        # result is a list of (success, title, filepath, chars)
+        results = result
+        if not results:
+            print("\n[FAILED] No articles found for the given date/keyword.")
+            marker = os.path.join(OUT, "dm_extract_status.txt")
+            with open(marker, "w") as f:
+                f.write("NOT_FOUND")
+            sys.exit(1)
+
+        print(f"\n[DONE] {len(results)} article(s) extracted:")
+        marker_lines = []
+        for success, title, fpath, chars in results:
+            print(f"  {title} ({chars} chars) → {fpath}")
+            marker_lines.append(f"OK|{title}|{fpath}|{chars}")
         marker = os.path.join(OUT, "dm_extract_status.txt")
         with open(marker, "w") as f:
-            f.write(f"OK|{title}|{fpath}|{chars}")
+            f.write("\n".join(marker_lines))
     else:
-        print("\n[FAILED] Article not found for the given date/keyword.")
-        marker = os.path.join(OUT, "dm_extract_status.txt")
-        with open(marker, "w") as f:
-            f.write("NOT_FOUND")
-        sys.exit(1)
+        success, title, fpath, chars = result
+        if success:
+            print(f"\n[DONE] {title} ({chars} chars)")
+            print(f"File: {fpath}")
+            marker = os.path.join(OUT, "dm_extract_status.txt")
+            with open(marker, "w") as f:
+                f.write(f"OK|{title}|{fpath}|{chars}")
+        else:
+            print("\n[FAILED] Article not found for the given date/keyword.")
+            marker = os.path.join(OUT, "dm_extract_status.txt")
+            with open(marker, "w") as f:
+                f.write("NOT_FOUND")
+            sys.exit(1)
 
 
 if __name__ == "__main__":

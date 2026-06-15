@@ -108,7 +108,7 @@ def main():
 
     # Step 4: DM 早报提取与生成
     dm_runner = BASE_DIR / 'dm_daily.py'
-    dm_docx = None
+    dm_files = []
     if dm_runner.exists():
         dm_cmd = f'{sys.executable} "{dm_runner}" --force'
         # DM only publishes on weekdays. Always use today (or today is
@@ -119,11 +119,13 @@ def main():
             dm_target_date = dm_target_date - dt.timedelta(days=1)
         dm_cmd += f" --date {dm_target_date.strftime('%Y-%m-%d')}"
         if run_step("Step 4: DM 早报提取与 DOCX 生成", dm_cmd):
-            # Find the generated DM DOCX
-            dm_files = sorted(BASE_DIR.glob('DM早报_*.docx'))
+            # Find ALL generated DM DOCX files (早报 + 要闻速览)
+            dm_files = sorted(BASE_DIR.glob('DM早报_*.docx')) + sorted(BASE_DIR.glob('DM要闻速览_*.docx'))
             if dm_files:
-                dm_docx = dm_files[-1]
-                print(f"[信息] DM 早报 DOCX: {dm_docx}")
+                for f in dm_files:
+                    print(f"[信息] DM 早报 DOCX: {f}")
+            else:
+                print("[警告] DM 早报 DOCX 生成完成但未找到文件")
     else:
         print("[警告] 找不到 dm_daily.py，跳过 DM 早报")
 
@@ -134,8 +136,9 @@ def main():
         send_script = BASE_DIR / 'send_report_email.py'
         if send_script.exists():
             cmd = f'{sys.executable} "{send_script}" "{md_file}"'
-            if dm_docx:
-                cmd += f' --attach "{dm_docx}"'
+            # Attach ALL DM DOCX files (早报 + 要闻速览)
+            for f in dm_files:
+                cmd += f' --attach "{f}"'
             run_step("Step 5: 发送报告邮件", cmd)
         else:
             print("[警告] 找不到 send_report_email.py，跳过邮件发送")
@@ -145,8 +148,9 @@ def main():
     print()
     print("=" * 60)
     print("  完成！报告已生成（MD + DOCX 双格式）并发送邮件。")
-    if dm_docx:
-        print(f"  DM 早报附件：{dm_docx.name}")
+    if dm_files:
+        for f in dm_files:
+            print(f"  DM 早报附件：{f.name}")
     print("=" * 60)
 
 
