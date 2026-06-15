@@ -214,7 +214,7 @@ python daily_runner.py
 
 该脚本串联以下三个步骤：
 
-1. **`fetch_126_email.py`** — 从 126 邮箱拉取当日 DM 雷达日报邮件，保存 HTML 正文到 `raw_email_body.html`
+1. **`fetch_gmail_dm.py`** — 从 Gmail 拉取当日 DM 雷达日报邮件，保存 HTML 正文到 `raw_email_body.html`
 2. **`parse_email_html.py`** — 用 BeautifulSoup 解析 HTML，提取所有板块的结构化数据，输出 `raw_email_body_parsed.json`
 3. **`generate_qige_report.py`** — 应用 CLAUDE.md 中的筛选规则（排除噪音、风险分级、同主体合并），生成 `【大家资产持仓信用主体舆情日报】_YYYY-MM-DD.md`
 
@@ -223,7 +223,7 @@ python daily_runner.py
 #### Step 1：拉取邮件
 
 ```bash
-python fetch_126_email.py
+python fetch_gmail_dm.py
 ```
 
 确认终端输出显示 `[完成]`。
@@ -278,7 +278,7 @@ python generate_qige_report.py raw_email_body_parsed.json
 
 | 文件 | 用途 |
 |:---|:---|
-| `fetch_126_email.py` | 126 邮箱 IMAP 拉取，保存 HTML 正文 + 文本摘要 |
+| `fetch_gmail_dm.py` | Gmail IMAP 拉取，保存 HTML 正文 + 文本摘要 |
 | `parse_email_html.py` | BeautifulSoup 解析 HTML → 结构化 JSON |
 | `generate_qige_report.py` | 应用筛选规则 → 生成 Markdown 报告 |
 | `daily_runner.py` | 串联上述三步的一键入口 |
@@ -286,5 +286,5 @@ python generate_qige_report.py raw_email_body_parsed.json
 ### 故障恢复
 
 - **邮件拉取失败**：检查 `raw_email_body.html` 是否已存在，若存在可直接跳过 Step 1
-- **HTML 解析失败**：检查 `raw_email_body.html` 是否完整（约 780KB），重新运行 `fetch_126_email.py`
+- **HTML 解析失败**：检查 `raw_email_body.html` 是否完整（约 780KB），重新运行 `fetch_gmail_dm.py`
 - **OSS Excel 链接 404**：时间限制签名 URL 过期属正常现象，HTML 解析为首选方案，不依赖 Excel 下载

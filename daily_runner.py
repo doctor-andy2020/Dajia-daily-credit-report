@@ -67,9 +67,9 @@ def main():
             d = d - datetime.timedelta(days=1)
         target_dates = [d]
 
-    fetch_script = BASE_DIR / 'fetch_126_email.py'
+    fetch_script = BASE_DIR / 'fetch_gmail_dm.py'
     if not fetch_script.exists():
-        print("[错误] 找不到 fetch_126_email.py")
+        print("[错误] 找不到 fetch_gmail_dm.py")
         sys.exit(1)
 
     # Step 1: 拉取各日期的邮件
