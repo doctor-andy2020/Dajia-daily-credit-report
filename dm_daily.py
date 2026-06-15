@@ -52,7 +52,7 @@ def main():
     print(f"DM 早报自动化 — {date_str}（周{WEEKDAYS[weekday]}）")
 
     txt_file = BASE_DIR / f"dm_article_{datestr}.txt"
-    docx_file = BASE_DIR / f"DM信用早报_{datestr}.docx"
+    docx_file = BASE_DIR / f"DM早报_{datestr}.docx"
 
     # Step A: Extract article from DM
     if not args.skip_extract:

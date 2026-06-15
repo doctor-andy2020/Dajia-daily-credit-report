@@ -41,5 +41,5 @@ jobs:
           path: |
             【大家资产持仓信用主体舆情日报】_*.md
             【大家资产持仓信用主体舆情日报】_*.docx
-            DM信用早报_*.docx
+            DM早报_*.docx
           retention-days: 7

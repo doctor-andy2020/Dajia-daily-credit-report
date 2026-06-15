@@ -120,7 +120,7 @@ def main():
         dm_cmd += f" --date {dm_target_date.strftime('%Y-%m-%d')}"
         if run_step("Step 4: DM 早报提取与 DOCX 生成", dm_cmd):
             # Find the generated DM DOCX
-            dm_files = sorted(BASE_DIR.glob('DM信用早报_*.docx'))
+            dm_files = sorted(BASE_DIR.glob('DM早报_*.docx'))
             if dm_files:
                 dm_docx = dm_files[-1]
                 print(f"[信息] DM 早报 DOCX: {dm_docx}")
