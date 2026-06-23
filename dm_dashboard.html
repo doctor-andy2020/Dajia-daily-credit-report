@@ -1,0 +1,267 @@
+<!DOCTYPE html><html lang="en"><head>
+    <meta charset="UTF-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>DealingMatrix 您的同业报价共享平台</title>
+    <link rel="shortcut icon" type="image/x-icon" href="https://web.innodealing.com/dashboard/img/favicon/favicon.ico">
+    <link href="https://web.innodealing.com/dashboard/css/vendor/bootstrap-2a31dca112f26923b51676cb764c58d5.css" rel="stylesheet">
+    <link href="https://web.innodealing.com/dashboard/css/vendor/font-40248fd229068548786fce30922af831.css" rel="stylesheet">
+    <link href="https://web.innodealing.com/dashboard/css/vendor/jquery.contextMenu-e1172a3d0cb220fe510217dc40c70a61.css" rel="stylesheet">
+    <link href="https://web.innodealing.com/dashboard/css/vendor/chrome-tabs-6d43c05c5cf1e3df7f8ffe03a1ff38bb.css" rel="stylesheet">
+    <link href="https://web.innodealing.com/dashboard/css/app/dashboard-89d82ba5a2b8217696311d49b85dd7de.css" rel="stylesheet">
+</head>
+<body class="dashboard-index">
+<script>
+    window.loginUrl = "https:\/\/web.innodealing.com\/auth-service\/signin";
+    window.savedTabs = null;
+    window.justSignedIn = true;
+    window.reportUrl = "https:\/\/rest.innodealing.com\/onshore-bond-management\/publicapi";
+    window.indexPageTitle = "\u9996\u9875";
+    window.kfUrl = null;
+    window.uid = 67386;
+    window.nickname ="\u5B5F\u601D\u951C";
+    window.username = "mengsiqi";
+    window.canChangePassword=true;
+    window.wsUrl = "https:\/\/socketio.innodealing.com\/dm_dashboard_web";
+    // 跳转到发行人详情
+    window.navComUniCode = null;
+    window.navComShortName = null;
+    // 跳转到债券详情
+    window.navBondUniCode = null;
+    window.navBondShortName = null;
+    window.domainRest = "https:\/\/rest.innodealing.com";
+    window.ads = null;
+    window.menus=null;
+    window.loginFlowId="0b1641ba-30a6-4888-a397-7e467aefe434";
+    var source = "https:\/\/web.innodealing.com\/quote-web\/#\/bond\/home-page";
+    if (source.indexOf("&rnd=") > -1 || source.indexOf("?rnd=") > -1) {
+        window.indexPage = source;
+    } else if (source.indexOf("?") > -1) {
+        window.indexPage = source + ("&rnd=" + (new Date()).getTime());
+    } else {
+        window.indexPage = source + ("?rnd=" + (new Date()).getTime());
+    }
+    window.ads = null;
+    window.restricted = false;
+</script>
+
+
+<div class="container-fluid chrome-tabs-container" style="display: none;">
+    <div class="chrome-tabs chrome-tabs-dark-theme" data-chrome-tabs-instance-id="0">
+        <div class="chrome-tabs-content">
+        <div class="chrome-tab chrome-tab-current" data-chrome-tab-instance-id="default" data-chrome-tab-instance-title="首页" data-chrome-tab-instance-data="https://web.innodealing.com/quote-web/#/bond/home-page?rnd=1781316204997" title="首页" style="width: 45px;">
+      <div class="chrome-tab-background">
+        <svg version="1.1" xmlns="http://www.w3.org/2000/svg"><defs><symbol id="topleft" viewBox="0 0 214 29"><path d="M14.3 0.1L214 0.1 214 29 0 29C0 29 12.2 2.6 13.2 1.1 14.3-0.4 14.3 0.1 14.3 0.1Z"></path></symbol><symbol id="topright" viewBox="0 0 214 29"><use xlink:href="#topleft"></use></symbol><clipPath id="crop"><rect class="mask" width="100%" height="100%" x="0"></rect></clipPath></defs><svg width="50%" height="100%" transfrom="scale(-1, 1)"><use xlink:href="#topleft" width="214" height="29" class="chrome-tab-background"></use><use xlink:href="#topleft" width="214" height="29" class="chrome-tab-shadow"></use></svg><g transform="scale(-1, 1)"><svg width="50%" height="100%" x="-100%" y="0"><use xlink:href="#topright" width="214" height="29" class="chrome-tab-background"></use><use xlink:href="#topright" width="214" height="29" class="chrome-tab-shadow"></use></svg></g></svg>
+      </div>
+      <!--<div class="chrome-tab-favicon"></div>-->
+      <div class="chrome-tab-title">首页</div>
+      <div class="chrome-tab-close"></div>
+    </div><div class="chrome-tab-adder">
+        <div class="chrome-tab-adder-button"><span class="icon-contrast-add"></span></div>
+    </div></div>
+        <!--<div class="chrome-tabs-bottom-bar"></div>-->
+    <style>
+            .chrome-tabs[data-chrome-tabs-instance-id="0"] .chrome-tab:nth-child(1) {
+              transform: translate3d(0px, 0, 0)
+            }
+          
+                  .chrome-tabs .chrome-tab-adder {
+                    transform: translate3d(45px, 0, 0)
+                  }
+                </style></div>
+   <!-- <div class="frames" style="display: none">
+    </div>-->
+</div><!-- /.container -->
+<iframe allow="autoplay" id="new-dashboard-frame" class="new-dashboard-frame" src="https://web.innodealing.com/quote-web/#/bond/home?tab=1" style="height: 100%; width: 100%; margin: 0; padding: 0; border:none; position: absolute; top: 0; bottom: 0; right: 0; left: 0"></iframe>
+<div class="modal" tabindex="-1" role="dialog" id="model-feedback">
+    <div class="modal-dialog" role="document">
+        <div class="modal-content">
+            <div class="modal-header">
+                <button type="button" class="close" data-dismiss="modal" aria-label="Close"><span aria-hidden="true">×</span>
+                </button>
+                <span class="modal-title">产品反馈</span>
+            </div>
+            <div class="modal-body">
+                <textarea class="feedback-area" style=""></textarea>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-submit">提交</button>
+                <button type="button" class="btn btn-cancel" data-dismiss="modal">取消</button>
+            </div>
+        </div><!-- /.modal-content -->
+    </div><!-- /.modal-dialog -->
+</div><!-- /.modal -->
+<div class="modal" tabindex="-1" role="dialog" id="model-feedback-response">
+    <div class="modal-dialog" role="document">
+        <div class="modal-content">
+            <div class="modal-header">
+                <button type="button" class="close" data-dismiss="modal" aria-label="Close"><span aria-hidden="true">×</span>
+                </button>
+                <span class="modal-title"></span>
+            </div>
+            <div class="modal-body">
+                <img class="success-logo" src="https://web.innodealing.com/dashboard/img/index/handshake-2ac85510298ba8cca68287ee10a0d6d2.png">
+                <p class="success-tip">非常感谢</p>
+                <p class="success-tip">已收到您的反馈，我们会尽快跟进解决您的问题！</p>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-close" data-dismiss="modal">关闭</button>
+            </div>
+        </div><!-- /.modal-content -->
+    </div><!-- /.modal-dialog -->
+</div><!-- /.modal -->
+<div class="modal" tabindex="-1" role="dialog" id="model-aboutus">
+    <div class="modal-dialog" role="document">
+        <div class="modal-content">
+            <div class="modal-header">
+                <button type="button" class="close" data-dismiss="modal" aria-label="Close"><span aria-hidden="true">×</span>
+                </button>
+                <span class="modal-title"></span>
+            </div>
+            <div class="modal-body">
+                <div class="logo-panel">
+                    <img class="logo" src="https://web.innodealing.com/dashboard/img/index/logo-2-720e09bde0bac8122471d6d0500fe64a.png">
+                </div>
+                <table class="conatct-ways">
+                    <tbody><tr class="header">
+                        <th class="phone">
+                            <img class="img-phone" src="https://web.innodealing.com/dashboard/img/index/phone-0f9ad0fda16db96a24cfda8a13f4736c.png">
+                            <span>电话咨询</span>
+                        </th>
+                        <th class="app">
+                            <img class="img-app" src="https://web.innodealing.com/dashboard/img/index/app-28ef3553d42aa2a90ae5a2e1560b6f89.png">
+                            <span>app下载</span>
+                        </th>
+                    </tr>
+                    <tr class="body">
+                        <td class="phone">
+                            <p><span class="icon-tel"></span>400-0918-000
+                            </p>
+                        </td>
+                        <td class="app">
+                            <div class="img-qrcode" style="display: none;display: inline-block" id="sales-qr-checkin-img"></div>
+                            <img class="img-qrcode" id="app-qr-img" src="https://web.innodealing.com/dashboard/img/index/qrcode-3e924c606935ec6ea87dbfef09ee6e99.jpg">
+                        </td>
+                    </tr>
+                </tbody></table>
+                <div class="bottom-bar">
+                    <a class="website-link" target="_blank" href="https://ali.innodealing.com">访问我们的官网</a>
+                    <span class="copyright">Copyright  ©  2010-2018  DEALINGMATRIX.  All Rights Reserved.</span>
+                    <button id="sales_qr_checkin_btn" style="margin-left: 100px; display: inline-block" type="button">
+                        签到
+                    </button>
+                </div>
+            </div>
+        </div><!-- /.modal-content -->
+    </div><!-- /.modal-dialog -->
+</div><!-- /.modal -->
+<div class="modal" tabindex="-1" role="dialog" id="model-modify-password">
+    <div class="modal-dialog" role="document">
+        <div class="modal-content">
+            <div class="modal-header">
+                <button type="button" class="close" data-dismiss="modal" aria-label="Close"><span aria-hidden="true">×</span>
+                </button>
+                <span class="modal-title"></span>
+            </div>
+            <div class="modal-body">
+                <table>
+                    <tbody><tr>
+                        <td class="caption">请输入新密码：</td>
+                        <td><input class="passwordbox initial" type="password" placeholder="请至少输入6位数的密码" minlength="6" maxlength="16" pattern="^[a-zA-Z0-9]{6,16}$" style=""></td>
+                    </tr>
+                    <tr>
+                        <td></td>
+                        <td class="tip"></td>
+                    </tr>
+                    <tr>
+                        <td class="caption">请再次输入新密码：</td>
+                        <td><input class="passwordbox confirmed" type="password" placeholder="请至少输入6位数的密码" minlength="6" maxlength="16" pattern="^[a-zA-Z0-9]{6,16}$" style=""></td>
+                        
+                    </tr>
+                </tbody></table>
+            </div><!-- /.modal-content -->
+            <div class="modal-footer">
+                <button type="button" class="btn btn-save">保存</button>
+                <button type="button" class="btn btn-cancel" data-dismiss="modal">取消</button>
+            </div>
+        </div>
+    </div><!-- /.modal-dialog -->
+</div><!-- /.modal -->
+<div class="modal" tabindex="-1" role="dialog" id="model-modify-password-success">
+    <div class="modal-dialog" role="document">
+        <div class="modal-content">
+            <div class="modal-header">
+                <button type="button" class="close" data-dismiss="modal" aria-label="Close"><span aria-hidden="true">×</span>
+                </button>
+                <span class="modal-title"></span>
+            </div>
+            <div class="modal-body">
+                <span><span class="icon-success"></span>密码设置成功</span>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-close" data-dismiss="modal">完成</button>
+            </div>
+        </div><!-- /.modal-content -->
+    </div><!-- /.modal-dialog -->
+</div><!-- /.modal -->
+<div class="modal" tabindex="-1" role="dialog" id="model-logout">
+    <div class="modal-dialog" role="document">
+        <div class="modal-content">
+            <div class="modal-header">
+                <button type="button" class="close" data-dismiss="modal" aria-label="Close"><span aria-hidden="true">×</span>
+                </button>
+                <span class="modal-title"></span>
+            </div>
+            <div class="modal-body">
+                <span>您确定要退出当前账号吗？</span>
+            </div>
+            <div class="modal-footer">
+                <form id="logout-form" action="https://web.innodealing.com/auth-service/logout" method="post">
+                    <button id="logout-btn" type="submit" class="btn btn-save">退出</button>
+                    <button type="button" class="btn btn-cancel" data-dismiss="modal">取消</button>
+                </form>
+            </div>
+        </div><!-- /.modal-content -->
+    </div><!-- /.modal-dialog -->
+</div><!-- /.modal -->
+<!-- /.modal -->
+<!-- /.modal -->
+<div class="modal" tabindex="-1" role="dialog" id="model-kick">
+    <div class="modal-dialog" role="document">
+        <div class="modal-content">
+            <div class="modal-header">
+                <span class="modal-title"></span>
+            </div>
+            <div class="modal-body">
+                <span>该账号已在其他设备登录，请重新登录或修改密码。</span>
+            </div>
+            <div class="modal-footer">
+                <form action="https://web.innodealing.com/auth-service/logout" method="post">
+                    <button id="kick-logout-btn" type="submit" class="btn btn-save">重新登录</button>
+                </form>
+            </div>
+        </div><!-- /.modal-content -->
+    </div><!-- /.modal-dialog -->
+</div><!-- /.modal -->
+<iframe src="/quote-web/background.html" style="width:0;height:0;border:0; border:none;"></iframe>
+<script src="https://web.innodealing.com/dashboard/js/vendor/polyfill-52fd5bfaca607f381a1d2e49698b7244.js"></script>
+<script src="https://web.innodealing.com/dashboard/js/vendor/jquery-ceca95dd6ef2c8e5f7f8d866bcc84bca.js"></script>
+<script src="https://web.innodealing.com/dashboard/js/vendor/bootstrap-35dc5e21a0a7ee8072911a6deb821fc8.js"></script>
+<script src="https://web.innodealing.com/dashboard/js/vendor/dmLiteProvider-3d8dfa09a1fe4546300e54144330593b.js"></script>
+<script src="https://web.innodealing.com/dashboard/js/vendor/draggabilly-e7dff4e06987fe506e9366909c55cb18.js"></script>
+<script src="https://web.innodealing.com/dashboard/js/vendor/chrome-tab-60462566407a7257c65a15c6d6dc5cd2.js"></script>
+<script src="https://web.innodealing.com/dashboard/js/vendor/socket.io-12122450c3a66bb54ded14d1a22aea0a.js"></script>
+<script src="https://web.innodealing.com/dashboard/js/vendor/qrcode-bbd1d77feaebc0d7deff99abc3e10c5a.js"></script>
+<script src="https://web.innodealing.com/dashboard/js/vendor/jquery-ui-94c749e450effb4f7e59915edcf6c072.js"></script>
+<script src="https://web.innodealing.com/dashboard/js/vendor/jquery.contextMenu-e875e05430461dc5bca7a8d5dce37c12.js"></script>
+<script src="https://web.innodealing.com/dashboard/js/app/report-e1fc0985d8947317fd9800d37abe1268.js"></script>
+<script src="https://web.innodealing.com/dashboard/js/app/dashboard-ad52d07d615dd6dafea357ccbc933c3e.js"></script><ul class="context-menu-list context-menu-root" style="display: none;"><li class="context-menu-item"><span>刷新</span></li><li class="context-menu-item"><span>关闭标签页</span></li><li class="context-menu-item"><span>关闭其他标签页</span></li><li class="context-menu-item"><span>关闭右边标签页</span></li></ul>
+<script>
+    window.da = window.da || function () {
+        (da.q = da.q || []).push(arguments)
+    };
+    da('heartbeat', 'dashboard', 'index', 300000);
+</script>
+<script src="https://web.innodealing.com/dashboard/js/vendor/analytics-e4f7e934d6bd42d6b3d07eb6302f206c.js"></script>
+
+</body></html>

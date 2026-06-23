@@ -147,12 +147,37 @@ CONTENT_STARTERS = [
     "周五", "周六", "周日", "周一", "周二", "周三", "周四",
     "以下简称", "截至发稿", "据中国",
     # Purpose-clause openers — common in policy/regulation content paragraphs
-    # that elaborate on the title's announcement
     "为贯彻", "为贯彻落实", "为规范", "为促进", "为落实",
     "为加强", "为推动", "为进一步", "为更好", "为切实",
     "为深入", "为加快", "为保障", "为支持", "为引导",
     # Reporting-continuation patterns
     "修订说明指出", "修订说明", "修订后的",
+    # Financial analysis / commentary continuation starters
+    "展望", "预计", "预测", "我们认为", "分析人士", "分析认为",
+    "值得关注", "受此影响", "这意味着", "据了解", "据悉",
+    "事实上", "实际上", "相比之下", "有分析", "业内",
+    "市场人士", "未来", "随着", "近期", "今年以来",
+    "从中长期", "下一阶段", "往后看", "往前看",
+    "在此背景下", "在此基础", "由此来看",
+    "相较于", "对比", "与之相比",
+    "换句话", "换言之", "也就", "可以说",
+    "注意到", "需要关注", "需关注", "应关注",
+    "反观", "相对应", "另一方面", "与之相对",
+    "尤其", "特别", "更为关键", "更值得",
+    "具体来看", "具体而言", "展开来看",
+    "进一步", "进一", "不仅", "不只",
+    "从结构看", "从数据看", "分项来看", "分行来看",
+    "按行业", "按地区", "按业务",
+    "对应", "对应地", "相应地",
+    # Company-specific content elaboration
+    "公司表示", "公司称", "公司指出", "公司预计", "公司预测",
+    "公司计划", "公司拟", "公司已", "公司将", "公司正在",
+    "该公", "该行", "该机构",
+    "今年以", "去年以", "上半年", "下半年",
+    "一季度", "二季度", "三季度", "四季度",
+    "报告期", "同期", "环比", "同比",
+    "全年", "本月", "本周", "本季",
+    "最新", "近期", "近日",
 ]
 
 # Reporting-verb suffixes — if an entity name ends with one of these
@@ -345,6 +370,12 @@ def is_content_line(text, title_text=""):
             if len(title_text) >= 3 and len(text) > len(title_text) * 1.3:
                 if text.startswith(title_text[:3]):
                     return True
+
+    # ── Fallback: long text following a title is almost certainly content ──
+    # Real news titles in DM reports are rarely longer than 60 chars.
+    # Long lines that follow an existing title are paragraphs, not new titles.
+    if title_text and len(text) > 80:
+        return True
 
     return False
 
@@ -619,7 +650,7 @@ def _add_sub_heading(doc, text):
     _add_heading_run(sh, f"▸ {text}", size=11, bold=True, color=RGBColor(60, 90, 150))
 
 
-def _render_macro_section(doc, section):
+def _render_macro_section(doc, section, bold_title=True):
     """Render a macro-news section with numbered bold titles and indented content.
     Works for both 债市要闻速览 and DM信用早报."""
     items = section["items"]
@@ -656,13 +687,14 @@ def _render_macro_section(doc, section):
 
         num_run = tp.add_run(f"{news_num}. ")
         num_run.font.size = Pt(10.5)
-        num_run.font.bold = True
+        num_run.font.bold = bold_title
         num_run.font.name = "微软雅黑"
-        num_run.font.color.rgb = RGBColor(30, 60, 120)
+        if bold_title:
+            num_run.font.color.rgb = RGBColor(30, 60, 120)
 
         title_run = tp.add_run(title_text)
         title_run.font.size = Pt(10.5)
-        title_run.font.bold = True
+        title_run.font.bold = bold_title
         title_run.font.name = "微软雅黑"
 
         # ── Content ──
@@ -677,7 +709,7 @@ def _render_macro_section(doc, section):
         news_num += 1
 
 
-def _render_simple_items(doc, items):
+def _render_simple_items(doc, items, bold_title=True):
     """Render items as simple bold-title + content paragraphs."""
     for item in items:
         title = item["title"].strip()
@@ -689,13 +721,13 @@ def _render_simple_items(doc, items):
             title = parts[0].strip()
             content = parts[1].strip()
 
-        # Bold title
+        # Title
         tp = doc.add_paragraph()
         tp.paragraph_format.space_before = Pt(6)
         tp.paragraph_format.space_after = Pt(1)
         tr = tp.add_run(title)
         tr.font.size = Pt(10)
-        tr.font.bold = True
+        tr.font.bold = bold_title
         tr.font.name = "微软雅黑"
 
         # Content
@@ -805,11 +837,13 @@ def build_docx(article):
         is_simple = any(s in heading for s in SIMPLE_SECTIONS) or is_bullet
 
         if is_macro:
-            _render_macro_section(doc, sec)
+            bold = heading != "公司新闻"
+            _render_macro_section(doc, sec, bold_title=bold)
         elif is_bullet:
             _render_bullet_items(doc, items)
         elif is_simple:
-            _render_simple_items(doc, items)
+            bold = heading != "机构观点"
+            _render_simple_items(doc, items, bold_title=bold)
         else:
             # Default: simple rendering
             _render_simple_items(doc, items)

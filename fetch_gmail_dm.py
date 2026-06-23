@@ -136,9 +136,15 @@ def fetch_emails_for_date(target_date):
         conn.logout()
         sys.exit(1)
 
-    # --- 搜索指定日期的邮件 ---
-    print(f"[搜索] 日期 ({date_str}) 的全部邮件 ...")
-    status, message_ids = conn.search(None, f'(ON "{date_str}")')
+    # --- 搜索邮件（日期范围，容错时区差异）---
+    # Gmail IMAP 使用服务器内部日期（受发件/收件时区影响），
+    # 用 SINCE...BEFORE 范围搜索比 ON 精确日期更可靠
+    yesterday = target_date - datetime.timedelta(days=1)
+    tomorrow = target_date + datetime.timedelta(days=1)
+    since_str = yesterday.strftime("%d-%b-%Y")
+    before_str = tomorrow.strftime("%d-%b-%Y")
+    print(f"[搜索] 日期范围 {since_str} → {before_str} ...")
+    status, message_ids = conn.search(None, f'(SINCE "{since_str}" BEFORE "{before_str}")')
     if status != "OK":
         print("[错误] 搜索失败。")
         conn.logout()

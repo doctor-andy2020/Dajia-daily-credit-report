@@ -212,11 +212,27 @@
 python daily_runner.py
 ```
 
-该脚本串联以下三个步骤：
+该脚本串联以下五个步骤：
 
-1. **`fetch_gmail_dm.py`** — 从 Gmail 拉取当日 DM 雷达日报邮件，保存 HTML 正文到 `raw_email_body.html`
+1. **`fetch_126_email.py`** — 从邮件拉取当日 DM 雷达日报，保存 HTML 正文
 2. **`parse_email_html.py`** — 用 BeautifulSoup 解析 HTML，提取所有板块的结构化数据，输出 `raw_email_body_parsed.json`
-3. **`generate_qige_report.py`** — 应用 CLAUDE.md 中的筛选规则（排除噪音、风险分级、同主体合并），生成 `【大家资产持仓信用主体舆情日报】_YYYY-MM-DD.md`
+3. **`generate_qige_report.py`** — 应用 CLAUDE.md 中的筛选规则（排除噪音、风险分级、同主体合并），生成 MD + DOCX 双格式报告
+4. **`dm_daily.py`** — 从 DM 终端提取当日信用早报/债市要闻速览，生成格式化 DOCX
+5. **`send_report_email.py`** — 通过 SMTP 发送邮件（HTML 正文 + DOCX 附件）
+
+### 定时触发机制
+
+| 触发源 | 时间 | 说明 |
+|:---|:---|:---|
+| **GitHub Actions cron** | 北京时间 07:30（工作日） | 主力定时器，UTC 23:30 Sun-Thu |
+| **GAS 触发器** | 北京时间 09:00-10:00（工作日） | 兜底触发器，作为 DM早报补发机制 |
+| **Windows 任务计划** | 北京时间 09:00（工作日） | 本地备用（需设环境变量） |
+
+**去重机制**：
+- GitHub Actions workflow 级别：cron 触发时检查当天是否已有成功/进行中的 run，有则跳过
+- `daily_runner.py` 级别：北京时间 07:00-11:00 窗口限制 + 本地 sentinel 文件去重
+- GAS 级别：dispatch 前检查当天是否已有成功 run，有则跳过
+- workflow_dispatch（GAS/手动）不受 workflow 级别去重限制，确保 DM早报可补发
 
 ### 执行步骤
 
@@ -278,10 +294,15 @@ python generate_qige_report.py raw_email_body_parsed.json
 
 | 文件 | 用途 |
 |:---|:---|
-| `fetch_gmail_dm.py` | Gmail IMAP 拉取，保存 HTML 正文 + 文本摘要 |
+| `fetch_126_email.py` | IMAP 拉取 DM 雷达日报邮件，保存 HTML 正文 + 文本摘要 |
 | `parse_email_html.py` | BeautifulSoup 解析 HTML → 结构化 JSON |
-| `generate_qige_report.py` | 应用筛选规则 → 生成 Markdown 报告 |
-| `daily_runner.py` | 串联上述三步的一键入口 |
+| `generate_qige_report.py` | 应用筛选规则 → 生成 Markdown + DOCX 双格式报告 |
+| `dm_daily.py` | DM 早报流水线入口（Playwright 提取 + DOCX 生成） |
+| `dm_pipeline.py` | DM 终端 Playwright 自动化提取信用早报/要闻速览 |
+| `generate_article_docx.py` | DM 早报 DOCX 生成器（格式化排版） |
+| `send_report_email.py` | SMTP 发送报告邮件（HTML 正文 + DOCX 附件） |
+| `daily_runner.py` | 串联上述步骤的一键入口 |
+| `trigger_workflow.gs` | Google Apps Script 兜底触发器 |
 
 ### 故障恢复
 

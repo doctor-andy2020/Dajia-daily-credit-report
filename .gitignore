@@ -5,6 +5,9 @@
 # 日志
 daily_log.txt
 
+# 去重标记
+.daily_sentinel_*
+
 # 邮件原始数据
 raw_email_*.html
 raw_email_*.txt

@@ -15,10 +15,18 @@ from pathlib import Path
 
 BASE_DIR = Path(__file__).parent
 
+# 固定使用北京时间，避免 GitHub Actions UTC 时区导致的日期错位
+BEIJING_TZ = datetime.timezone(datetime.timedelta(hours=8))
+
+
+def beijing_today():
+    """返回北京时间今天的 date 对象"""
+    return datetime.datetime.now(BEIJING_TZ).date()
+
 
 def get_target_dates():
-    """根据今天是星期几，返回需要拉取的邮件日期列表"""
-    today = datetime.date.today()
+    """根据北京时间的星期几，返回需要拉取的邮件日期列表"""
+    today = beijing_today()
     weekday = today.weekday()  # 0=Mon, 6=Sun
 
     if weekday == 0:  # 周一：拉周六、周日、周一（IMAP日期=新闻日期+1）
@@ -43,7 +51,7 @@ def run_step(description, cmd):
 
 def main():
     import datetime as dt
-    today = dt.date.today()
+    today = beijing_today()
     target_dates = get_target_dates()
 
     print("=" * 60)
@@ -54,6 +62,20 @@ def main():
     print("=" * 60)
 
     force_run = "--force" in sys.argv or "--force-weekend" in sys.argv
+
+    # ── 时间窗口限制：仅在北京时间 07:00-11:00 执行 ──
+    now_bj = dt.datetime.now(BEIJING_TZ)
+    hour_bj = now_bj.hour
+    if not force_run and not (7 <= hour_bj < 11):
+        print(f"[跳过] 当前北京时间 {now_bj.strftime('%H:%M')}，不在执行窗口(07:00-11:00)内。")
+        print(f"       使用 --force 可强制运行。")
+        sys.exit(0)
+
+    # ── 去重检查：今天已成功生成过报告则跳过 ──
+    sentinel = BASE_DIR / f".daily_sentinel_{today.strftime('%Y%m%d')}"
+    if sentinel.exists() and not force_run:
+        print(f"[跳过] 今日报告已生成（sentinel: {sentinel}），使用 --force 强制重跑。")
+        sys.exit(0)
 
     if not target_dates and not force_run:
         print("[跳过] 周末不执行（使用 --force 强制运行）。")
@@ -142,6 +164,11 @@ def main():
             run_step("Step 5: 发送报告邮件", cmd)
         else:
             print("[警告] 找不到 send_report_email.py，跳过邮件发送")
+
+        # ── 去重标记：报告已生成，写入 sentinel 防重复执行 ──
+        sentinel = BASE_DIR / f".daily_sentinel_{today.strftime('%Y%m%d')}"
+        sentinel.write_text(f"done at {dt.datetime.now().isoformat()}\nmd: {md_file.name}\n")
+        print(f"[去重] sentinel 已写入: {sentinel}")
     else:
         print("[警告] 未找到MD报告文件，跳过邮件发送")
 
