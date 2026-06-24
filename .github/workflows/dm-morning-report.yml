@@ -1,10 +1,11 @@
 name: DM Credit Morning Report
 
 on:
-  # 定时器：UTC 0:30 = 北京时间 08:30（DM早报 7:00 发布，8:30 前完成推送）
-  # 周一至周五执行
+  # 主力定时器：UTC 23:30 = 北京时间 07:30（与舆情日报相同，验证可靠）
+  # DM早报 7:00 已发布，7:30 开始提取，8:30 前完成推送
+  # 周一至周五执行（Sun-Thu UTC）
   schedule:
-    - cron: '30 0 * * 1-5'
+    - cron: '30 23 * * 0-4'
   workflow_dispatch:
     inputs:
       force:
@@ -12,50 +13,12 @@ on:
         type: boolean
         default: false
 
-# 允许 workflow 通过 gh CLI 查询自身运行历史（去重用）
-permissions:
-  actions: read
-  contents: read
-
 jobs:
   dm-morning:
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
       - uses: actions/checkout@v4
-
-      # ── 跨 run 去重：当天已有成功/进行中 run 则跳过 ──
-      # 去重针对 cron 触发；workflow_dispatch（手动/GAS兜底）始终放行
-      - name: Check existing run today (dedup)
-        id: dedup
-        if: github.event_name == 'schedule'
-        run: |
-          TODAY_BJ=$(TZ=Asia/Shanghai date +%Y-%m-%d)
-          echo "Beijing today: $TODAY_BJ"
-          # 查成功 run
-          SUCCESS=$(gh run list --workflow="${{ github.workflow }}" --branch=master --status=success --limit=10 --json createdAt --jq ".[] | select(.createdAt >= \"${TODAY_BJ}\") | .createdAt")
-          # 查进行中/排队中的 run
-          ACTIVE=$(gh run list --workflow="${{ github.workflow }}" --branch=master --status=in_progress --limit=10 --json createdAt --jq ".[] | select(.createdAt >= \"${TODAY_BJ}\") | .createdAt")
-          QUEUED=$(gh run list --workflow="${{ github.workflow }}" --branch=master --status=queued --limit=5 --json createdAt --jq ".[] | select(.createdAt >= \"${TODAY_BJ}\") | .createdAt")
-          if [ -n "$SUCCESS" ]; then
-            echo "Today's DM report already completed successfully ($SUCCESS). Skipping."
-            echo "skip=true" >> $GITHUB_OUTPUT
-          elif [ -n "$ACTIVE" ] || [ -n "$QUEUED" ]; then
-            echo "Today's DM run is already active/queued. Skipping to avoid race."
-            echo "skip=true" >> $GITHUB_OUTPUT
-          else
-            echo "No existing DM run today. Proceeding."
-            echo "skip=false" >> $GITHUB_OUTPUT
-          fi
-        env:
-          GH_TOKEN: ${{ github.token }}
-        continue-on-error: true
-
-      - name: Skip if already done
-        if: steps.dedup.outputs.skip == 'true'
-        run: |
-          echo "⏭  Dedup: skipping this run."
-          exit 0
 
       - uses: actions/setup-python@v5
         with:

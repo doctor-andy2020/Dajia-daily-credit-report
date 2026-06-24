@@ -253,14 +253,14 @@ python dm_morning_runner.py
 
 | 触发源 | 时间 | 说明 |
 |:---|:---|:---|
-| **GitHub Actions cron** | 北京时间 08:30（工作日） | 主力定时器，UTC 0:30 Mon-Fri |
+| **GitHub Actions cron** | 北京时间 07:30（工作日） | 主力定时器，UTC 23:30 Sun-Thu（与舆情日报同一 cron，已验证可靠） |
 | **GAS 触发器** | 北京时间 08:00-09:00（工作日） | 兜底触发器 |
 
-**为什么独立**：DM信用早报和舆情日报虽然都在8-9点窗口推送，但二者数据源和提取方式不同（DM终端 Playwright vs 邮件 IMAP），分开调度可避免一个环节失败影响另一个，且便于独立重跑和故障恢复。
+**为什么独立**：DM信用早报和舆情日报数据源和提取方式不同（DM终端 Playwright vs 邮件 IMAP），分开调度可避免一个环节失败影响另一个，且便于独立重跑和故障恢复。
 
 **去重机制**：
-- GitHub Actions workflow 级别：cron 触发时检查当天是否已有成功/进行中的 run，有则跳过
-- `dm_morning_runner.py` 级别：北京时间 08:00-10:00 窗口限制 + 本地 sentinel 文件去重
+- `dm_morning_runner.py` 级别：北京时间 07:00-10:00 窗口限制 + 本地 sentinel 文件去重
+- GAS 级别：dispatch 前检查当天是否已有成功 run，有则跳过
 - GAS 级别：dispatch 前检查当天是否已有成功 run，有则跳过
 
 ### 执行步骤
@@ -350,4 +350,4 @@ python generate_qige_report.py raw_email_body_parsed.json
 | 文件 | 用途 |
 |:---|:---|
 | `.github/workflows/daily-report.yml` | 舆情日报定时任务（UTC 23:30 Sun-Thu = BJ 07:30 Mon-Fri） |
-| `.github/workflows/dm-morning-report.yml` | DM早报定时任务（UTC 0:30 Mon-Fri = BJ 08:30 Mon-Fri） |
+| `.github/workflows/dm-morning-report.yml` | DM早报定时任务（UTC 23:30 Sun-Thu = BJ 07:30 Mon-Fri，与舆情日报同 cron） |

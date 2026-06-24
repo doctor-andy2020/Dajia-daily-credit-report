@@ -126,10 +126,10 @@ def main():
 
     force_run = "--force" in sys.argv
 
-    # ── 时间窗口限制：仅在北京时间 08:00-10:00 执行 ──
+    # ── 时间窗口限制：仅在北京时间 07:00-10:00 执行 ──
     hour_bj = now.hour
-    if not force_run and not (8 <= hour_bj < 10):
-        print(f"[跳过] 当前北京时间 {now.strftime('%H:%M')}，不在执行窗口(08:00-10:00)内。")
+    if not force_run and not (7 <= hour_bj < 10):
+        print(f"[跳过] 当前北京时间 {now.strftime('%H:%M')}，不在执行窗口(07:00-10:00)内。")
         print(f"       使用 --force 可强制运行。")
         sys.exit(0)
 

@@ -61,38 +61,34 @@ def main():
             f'{sys.executable} "{BASE_DIR}/dm_pipeline.py" --date {date_str} --all'
         )
         if not ok:
-            # Check if we have any cached txt files
-            has_cache = False
+            # 仅使用当日日期的缓存文件，绝不用通用缓存（避免发送过期内容）
+            today_caches = []
             for pattern in [f"dm_zaobao_{datestr}.txt", f"dm_yaowen_{datestr}.txt",
-                            f"dm_article_{datestr}.txt", "dm_article_output.txt"]:
-                if (BASE_DIR / pattern).exists():
-                    has_cache = True
-                    break
-            if not has_cache:
-                print("[错误] DM 早报提取失败，且无缓存文件。")
+                            f"dm_article_{datestr}.txt"]:
+                cache_path = BASE_DIR / pattern
+                if cache_path.exists():
+                    today_caches.append(cache_path)
+            if not today_caches:
+                print(f"[错误] DM 早报提取失败，且无当日({datestr})缓存文件。")
+                print(f"       不会使用过期缓存，请检查 DM 终端是否正常。")
                 sys.exit(1)
-            print(f"[警告] 提取部分失败，使用已有缓存文件。")
+            print(f"[警告] DM 提取失败，使用当日缓存（{len(today_caches)} 个文件）。")
 
-    # Find all extracted txt files
+    # Find all extracted txt files (仅使用当日缓存，不用通用文件)
     zaobao_txt = BASE_DIR / f"dm_zaobao_{datestr}.txt"
     yaowen_txt = BASE_DIR / f"dm_yaowen_{datestr}.txt"
     article_txt = BASE_DIR / f"dm_article_{datestr}.txt"
-    default_txt = BASE_DIR / "dm_article_output.txt"
 
     txt_files = []  # list of (txt_path, docx_path, label)
     if zaobao_txt.exists():
         txt_files.append((zaobao_txt, BASE_DIR / f"DM早报_{datestr}.docx", "DM信用早报"))
     if yaowen_txt.exists():
         txt_files.append((yaowen_txt, BASE_DIR / f"DM要闻速览_{datestr}.docx", "债市要闻速览"))
-    # Fallback: old naming convention
-    if not txt_files:
-        for f in [article_txt, default_txt]:
-            if f.exists():
-                txt_files.append((f, docx_file, "DM早报"))
-                break
+    if not txt_files and article_txt.exists():
+        txt_files.append((article_txt, docx_file, "DM早报"))
 
     if not txt_files:
-        print("[错误] 找不到 DM 文章文本文件。")
+        print(f"[错误] 找不到当日({datestr}) DM 文章文本文件，不会使用过期缓存。")
         sys.exit(1)
 
     print(f"[信息] 找到 {len(txt_files)} 篇文章: {', '.join(t[2] for t in txt_files)}")
