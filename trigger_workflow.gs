@@ -25,7 +25,7 @@ var DAILY_REPORT_WORKFLOW_ID = '292559747';
 // ⚠️ 部署步骤：push dm-morning-report.yml 到 GitHub 后，
 //    运行以下命令获取新 workflow ID，替换下面的值：
 //    gh api repos/doctor-andy2020/Dajia-daily-credit-report/actions/workflows --jq '.workflows[] | select(.name=="DM Credit Morning Report") | .id'
-var DM_MORNING_WORKFLOW_ID = 'PLACEHOLDER_GET_FROM_GITHUB';
+var DM_MORNING_WORKFLOW_ID = '301380840';
 
 
 function _getToken() {
