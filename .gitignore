@@ -7,6 +7,7 @@ daily_log.txt
 
 # 去重标记
 .daily_sentinel_*
+.dm_sentinel_*
 
 # 邮件原始数据
 raw_email_*.html
@@ -31,6 +32,9 @@ __pycache__/
 # OS
 .DS_Store
 Thumbs.db
+
+# GAS 凭证文件（token 存放在此，不提交）
+config.gs
 
 # Credentials (安全兜底)
 *.env

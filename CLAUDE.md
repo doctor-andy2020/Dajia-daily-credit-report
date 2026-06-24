@@ -204,7 +204,7 @@
 
 ## 高频命令 /daily
 
-当用户输入 `/daily` 时，按以下步骤自动执行：
+当用户输入 `/daily` 时，按以下步骤自动执行（**仅舆情日报，DM早报已独立**）：
 
 ### 自动化流水线（首选）
 
@@ -212,27 +212,56 @@
 python daily_runner.py
 ```
 
-该脚本串联以下五个步骤：
+该脚本串联以下四个步骤：
 
 1. **`fetch_126_email.py`** — 从邮件拉取当日 DM 雷达日报，保存 HTML 正文
 2. **`parse_email_html.py`** — 用 BeautifulSoup 解析 HTML，提取所有板块的结构化数据，输出 `raw_email_body_parsed.json`
 3. **`generate_qige_report.py`** — 应用 CLAUDE.md 中的筛选规则（排除噪音、风险分级、同主体合并），生成 MD + DOCX 双格式报告
-4. **`dm_daily.py`** — 从 DM 终端提取当日信用早报/债市要闻速览，生成格式化 DOCX
-5. **`send_report_email.py`** — 通过 SMTP 发送邮件（HTML 正文 + DOCX 附件）
+4. **`send_report_email.py`** — 通过 SMTP 发送邮件（HTML 正文 + DOCX 附件）
 
-### 定时触发机制
+### `/daily` 定时触发机制
 
 | 触发源 | 时间 | 说明 |
 |:---|:---|:---|
 | **GitHub Actions cron** | 北京时间 07:30（工作日） | 主力定时器，UTC 23:30 Sun-Thu |
-| **GAS 触发器** | 北京时间 09:00-10:00（工作日） | 兜底触发器，作为 DM早报补发机制 |
+| **GAS 触发器** | 北京时间 08:00-09:00（工作日） | 兜底触发器 |
 | **Windows 任务计划** | 北京时间 09:00（工作日） | 本地备用（需设环境变量） |
 
 **去重机制**：
 - GitHub Actions workflow 级别：cron 触发时检查当天是否已有成功/进行中的 run，有则跳过
 - `daily_runner.py` 级别：北京时间 07:00-11:00 窗口限制 + 本地 sentinel 文件去重
 - GAS 级别：dispatch 前检查当天是否已有成功 run，有则跳过
-- workflow_dispatch（GAS/手动）不受 workflow 级别去重限制，确保 DM早报可补发
+
+---
+
+## 高频命令 /dm-morning（DM信用早报 — 独立工作流）
+
+当用户输入 `/dm-morning` 时，执行 DM 早报独立流水线：
+
+### 自动化流水线
+
+```bash
+python dm_morning_runner.py
+```
+
+该脚本串联以下步骤：
+
+1. **`dm_daily.py`** — 从 DM 终端 Playwright 自动化提取当日信用早报/债市要闻速览，生成格式化 DOCX
+2. **邮件发送** — 通过 SMTP 发送邮件（HTML 正文 + DM早报 DOCX 附件）
+
+### `/dm-morning` 定时触发机制
+
+| 触发源 | 时间 | 说明 |
+|:---|:---|:---|
+| **GitHub Actions cron** | 北京时间 08:30（工作日） | 主力定时器，UTC 0:30 Mon-Fri |
+| **GAS 触发器** | 北京时间 08:00-09:00（工作日） | 兜底触发器 |
+
+**为什么独立**：DM信用早报和舆情日报虽然都在8-9点窗口推送，但二者数据源和提取方式不同（DM终端 Playwright vs 邮件 IMAP），分开调度可避免一个环节失败影响另一个，且便于独立重跑和故障恢复。
+
+**去重机制**：
+- GitHub Actions workflow 级别：cron 触发时检查当天是否已有成功/进行中的 run，有则跳过
+- `dm_morning_runner.py` 级别：北京时间 08:00-10:00 窗口限制 + 本地 sentinel 文件去重
+- GAS 级别：dispatch 前检查当天是否已有成功 run，有则跳过
 
 ### 执行步骤
 
@@ -301,11 +330,24 @@ python generate_qige_report.py raw_email_body_parsed.json
 | `dm_pipeline.py` | DM 终端 Playwright 自动化提取信用早报/要闻速览 |
 | `generate_article_docx.py` | DM 早报 DOCX 生成器（格式化排版） |
 | `send_report_email.py` | SMTP 发送报告邮件（HTML 正文 + DOCX 附件） |
-| `daily_runner.py` | 串联上述步骤的一键入口 |
-| `trigger_workflow.gs` | Google Apps Script 兜底触发器 |
+| `daily_runner.py` | 舆情日报一键入口（邮件拉取 → HTML 解析 → 报告生成 → 邮件发送） |
+| `dm_morning_runner.py` | DM 早报独立一键入口（DM 提取 → DOCX 生成 → 邮件发送） |
+| `trigger_workflow.gs` | Google Apps Script 兜底触发器（双工作流：舆情日报 + DM早报） |
 
 ### 故障恢复
 
+**舆情日报**：
 - **邮件拉取失败**：检查 `raw_email_body.html` 是否已存在，若存在可直接跳过 Step 1
 - **HTML 解析失败**：检查 `raw_email_body.html` 是否完整（约 780KB），重新运行 `fetch_gmail_dm.py`
 - **OSS Excel 链接 404**：时间限制签名 URL 过期属正常现象，HTML 解析为首选方案，不依赖 Excel 下载
+
+**DM早报**：
+- **DM 终端提取失败**：检查是否有当日缓存的 txt 文件（`dm_zaobao_*.txt` / `dm_yaowen_*.txt`），有则 `dm_daily.py --skip-extract` 跳过提取直接用缓存生成 DOCX
+- **Playwright 超时**：增加超时时间或手动在本地运行 `python dm_daily.py --force --date YYYY-MM-DD`
+
+### GitHub Actions Workflow 文件
+
+| 文件 | 用途 |
+|:---|:---|
+| `.github/workflows/daily-report.yml` | 舆情日报定时任务（UTC 23:30 Sun-Thu = BJ 07:30 Mon-Fri） |
+| `.github/workflows/dm-morning-report.yml` | DM早报定时任务（UTC 0:30 Mon-Fri = BJ 08:30 Mon-Fri） |

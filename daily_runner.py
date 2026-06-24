@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-/daily 统一入口脚本
+/daily 统一入口脚本（仅舆情日报，DM早报已独立为 dm_morning_runner.py）
 串联：邮件拉取 → HTML 解析 → 报告生成 → 邮件发送
 周一拉取周五+周六+周日三天邮件合并，周二至周五拉取前一天邮件
 用法：python daily_runner.py
@@ -128,40 +128,14 @@ def main():
         print("[错误] 报告生成失败")
         sys.exit(1)
 
-    # Step 4: DM 早报提取与生成
-    dm_runner = BASE_DIR / 'dm_daily.py'
-    dm_files = []
-    if dm_runner.exists():
-        dm_cmd = f'{sys.executable} "{dm_runner}" --force'
-        # DM only publishes on weekdays. Always use today (or today is
-        # a weekend, find the most recent weekday) — not target_dates[0]
-        # which might be Saturday when running on Monday.
-        dm_target_date = today
-        while dm_target_date.weekday() >= 5:
-            dm_target_date = dm_target_date - dt.timedelta(days=1)
-        dm_cmd += f" --date {dm_target_date.strftime('%Y-%m-%d')}"
-        if run_step("Step 4: DM 早报提取与 DOCX 生成", dm_cmd):
-            # Find ALL generated DM DOCX files (早报 + 要闻速览)
-            dm_files = sorted(BASE_DIR.glob('DM早报_*.docx')) + sorted(BASE_DIR.glob('DM要闻速览_*.docx'))
-            if dm_files:
-                for f in dm_files:
-                    print(f"[信息] DM 早报 DOCX: {f}")
-            else:
-                print("[警告] DM 早报 DOCX 生成完成但未找到文件")
-    else:
-        print("[警告] 找不到 dm_daily.py，跳过 DM 早报")
-
-    # Step 5: 发送邮件
+    # Step 4: 发送邮件
     md_file = list(BASE_DIR.glob('【大家资产持仓信用主体舆情日报】_*.md'))
     if md_file:
         md_file = sorted(md_file)[-1]
         send_script = BASE_DIR / 'send_report_email.py'
         if send_script.exists():
             cmd = f'{sys.executable} "{send_script}" "{md_file}"'
-            # Attach ALL DM DOCX files (早报 + 要闻速览)
-            for f in dm_files:
-                cmd += f' --attach "{f}"'
-            run_step("Step 5: 发送报告邮件", cmd)
+            run_step("Step 4: 发送报告邮件", cmd)
         else:
             print("[警告] 找不到 send_report_email.py，跳过邮件发送")
 
@@ -174,10 +148,8 @@ def main():
 
     print()
     print("=" * 60)
-    print("  完成！报告已生成（MD + DOCX 双格式）并发送邮件。")
-    if dm_files:
-        for f in dm_files:
-            print(f"  DM 早报附件：{f.name}")
+    print("  完成！舆情日报已生成（MD + DOCX 双格式）并发送邮件。")
+    print(f"  ※ DM信用早报已独立为单独工作流，不再随舆情日报发送")
     print("=" * 60)
 
 
