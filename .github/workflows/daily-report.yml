@@ -1,9 +1,10 @@
-name: Dajia Daily Credit Report
+name: Dajia Daily Credit Report（舆情日报 + DM早报双Job）
 
 on:
-  # 主力定时器：UTC 23:30 = 北京时间 07:30（提前至 8:30 前完成推送）
-  # GAS 触发器 9-10 点作为兜底
-  # daily_runner.py 内置去重 + 时间窗口(07:00-11:00 北京)防晚上重复推送
+  # 主力定时器：UTC 23:30 = 北京时间 07:30
+  # Job 1: 舆情日报（邮件IMAP）  Job 2: DM信用早报（DM终端Playwright）
+  # 两个 Job 并行执行，独立发送邮件
+  # GAS 触发器 8-9 点作为兜底
   schedule:
     - cron: '30 23 * * 0-4'
   workflow_dispatch:
@@ -19,6 +20,7 @@ permissions:
   contents: read
 
 jobs:
+  # ── Job 1: 舆情日报（邮件 IMAP → 解析 → 报告 → 发送）──
   daily:
     runs-on: ubuntu-latest
     timeout-minutes: 10
@@ -90,4 +92,56 @@ jobs:
           path: |
             【大家资产持仓信用主体舆情日报】_*.md
             【大家资产持仓信用主体舆情日报】_*.docx
+          retention-days: 7
+
+  # ── Job 2: DM信用早报（DM终端 Playwright → 提取 → DOCX → 发送）──
+  # 挂在同一个 cron 下确保可靠性（DM 独立 workflow 的 cron 存在 GitHub 已知问题）
+  dm-morning:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - uses: actions/cache@v4
+        with:
+          path: ~/.cache/pip
+          key: pip-${{ runner.os }}-${{ hashFiles('requirements.txt') }}
+          restore-keys: pip-${{ runner.os }}-
+
+      - run: pip install -r requirements.txt
+
+      - uses: actions/cache@v4
+        with:
+          path: ~/.cache/ms-playwright
+          key: playwright-${{ runner.os }}-chromium
+          restore-keys: playwright-${{ runner.os }}-
+
+      - run: python -m playwright install chromium
+
+      - name: Run DM morning pipeline
+        env:
+          TZ: Asia/Shanghai
+          EMAIL_ACCOUNT: ${{ secrets.EMAIL_ACCOUNT }}
+          EMAIL_PASSWORD: ${{ secrets.EMAIL_PASSWORD }}
+          EMAIL_RECIPIENTS: ${{ secrets.EMAIL_RECIPIENTS }}
+          DM_USER: ${{ secrets.DM_USER }}
+          DM_PASS: ${{ secrets.DM_PASS }}
+        run: |
+          if [[ "${{ github.event_name }}" == "workflow_dispatch" && "${{ inputs.force }}" == "true" ]]; then
+            python dm_morning_runner.py --force
+          else
+            python dm_morning_runner.py
+          fi
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: dm-morning-report
+          path: |
+            DM早报_*.docx
+            DM要闻速览_*.docx
           retention-days: 7
