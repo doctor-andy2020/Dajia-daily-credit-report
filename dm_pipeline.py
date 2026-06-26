@@ -122,32 +122,52 @@ async def extract_article(keywords, output_file=None, find_all=False, datestr=No
             url_short = item['url'][:200]
             print(f"    [{i}] {url_short}")
 
-        # Step 5: 在所有响应中智能搜索文章列表
-        articles = []
-        for item in api_data:
-            url = item["url"]
+        # Step 5: 搜索文章列表（优先 sentiment/news/paging，其次 headline/list，最后扫描全部）
+        def try_extract(item):
             data = item["data"]
-            if isinstance(data, dict):
-                for path in [
-                    lambda d: d.get("data", {}).get("list", []),
-                    lambda d: d.get("data", {}).get("records", []),
-                    lambda d: d.get("data", {}).get("items", []),
-                    lambda d: d.get("data", []),
-                    lambda d: d.get("list", []),
-                    lambda d: d.get("records", []),
-                    lambda d: d.get("result", {}).get("list", []),
-                ]:
-                    try:
-                        result = path(data)
-                        if isinstance(result, list) and len(result) > 0:
-                            first = result[0]
-                            if isinstance(first, dict) and ("title" in first or "sentimentTitle" in first or "sentimentId" in first):
-                                articles = result
-                                print(f"      ✅ 在 [{url[:120]}] 找到 {len(articles)} 篇文章")
-                                break
-                    except:
-                        pass
+            if not isinstance(data, dict):
+                return []
+            for path in [
+                lambda d: d.get("data", {}).get("list", []),
+                lambda d: d.get("data", {}).get("records", []),
+                lambda d: d.get("data", {}).get("items", []),
+                lambda d: d.get("data", []),
+                lambda d: d.get("list", []),
+                lambda d: d.get("records", []),
+                lambda d: d.get("result", {}).get("list", []),
+            ]:
+                try:
+                    result = path(data)
+                    if isinstance(result, list) and len(result) > 0:
+                        first = result[0]
+                        if isinstance(first, dict) and ("title" in first or "sentimentTitle" in first):
+                            return result
+                except:
+                    pass
+            return []
+
+        articles = []
+        # 优先级1: sentiment/news/paging（舆情新闻分页，这是信用早报所在位置）
+        for item in api_data:
+            if "sentiment/news/paging" in item["url"]:
+                articles = try_extract(item)
                 if articles:
+                    print(f"      ✅ sentiment/news/paging: {len(articles)} 篇")
+                    break
+        # 优先级2: headline/list
+        if not articles:
+            for item in api_data:
+                if "headline/list" in item["url"]:
+                    articles = try_extract(item)
+                    if articles:
+                        print(f"      ✅ headline/list: {len(articles)} 篇")
+                        break
+        # 优先级3: 扫描其他响应
+        if not articles:
+            for item in api_data:
+                articles = try_extract(item)
+                if articles:
+                    print(f"      ✅ 其他接口: {len(articles)} 篇")
                     break
 
         print(f"[5] {len(articles)} articles from API")
