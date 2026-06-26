@@ -106,34 +106,28 @@ async def extract_article(keywords, output_file=None, find_all=False, datestr=No
             return False, "", "", 0
         print(f"[2] Iframe OK: {frame.url[:80]}")
 
-        # Step 2: 直接跳转到 important-news 页面（整页加载，触发完整 API）
-        print("[3] Navigating to important-news (full page load)...")
-        await page.goto("https://web.innodealing.com/quote-web/#/bond/public-opinion/important-news",
-                        wait_until="networkidle")
-        await page.wait_for_timeout(8000)
-
-        # 重新获取 iframe（整页加载后 iframe 可能已刷新）
-        frame = page.frame("new-dashboard-frame")
-        if not frame:
-            # 尝试不带 iframe 的情况
-            print("[3] Iframe not found after reload, trying body...")
-
-        # Step 3: 诊断 — 打印所有截获的 API
-        print(f"[3.5] 截获 {len(api_data)} 个 API 响应:")
+        # Step 2: 先打印登录阶段截获的所有 API
+        print(f"[2.5] 登录阶段截获 {len(api_data)} 个 API:")
         for item in api_data:
-            url_short = item['url']
-            if len(url_short) > 200:
-                url_short = url_short[:200] + "..."
-            print(f"      {url_short}")
+            print(f"      {item['url'][:200]}")
 
-        # Step 4: 在所有 API 响应中搜索文章列表
+        # Step 3: Load article list
+        print("[3] Loading important-news...")
+        await frame.evaluate("window.location.hash = '#/bond/public-opinion/important-news'")
+        await page.wait_for_timeout(15000)
+
+        # Step 4: 打印所有截获的 API（不限于特定 URL）
+        print(f"[4] 总计截获 {len(api_data)} 个 API 响应")
+        for i, item in enumerate(api_data):
+            url_short = item['url'][:200]
+            print(f"    [{i}] {url_short}")
+
+        # Step 5: 在所有响应中智能搜索文章列表
         articles = []
         for item in api_data:
             url = item["url"]
             data = item["data"]
-            # 策略1: 搜索包含新闻列表的响应
             if isinstance(data, dict):
-                # 尝试多个可能的数据路径
                 for path in [
                     lambda d: d.get("data", {}).get("list", []),
                     lambda d: d.get("data", {}).get("records", []),
@@ -146,11 +140,10 @@ async def extract_article(keywords, output_file=None, find_all=False, datestr=No
                     try:
                         result = path(data)
                         if isinstance(result, list) and len(result) > 0:
-                            # 检查第一条是否像文章（有 title 或 sentimentTitle）
                             first = result[0]
                             if isinstance(first, dict) and ("title" in first or "sentimentTitle" in first or "sentimentId" in first):
                                 articles = result
-                                print(f"      在 {url[:120]} 中找到 {len(articles)} 篇文章")
+                                print(f"      ✅ 在 [{url[:120]}] 找到 {len(articles)} 篇文章")
                                 break
                     except:
                         pass
@@ -187,20 +180,13 @@ async def extract_article(keywords, output_file=None, find_all=False, datestr=No
 
         # Step 6: Extract each matched article
         results = []
-        content_target = frame if frame else page
         for idx, (target_id, matched_kw, article_title) in enumerate(matched):
             print(f"\n[6.{idx+1}/{len(matched)}] Opening article {target_id} — {article_title[:80]}")
-            if frame:
-                await frame.evaluate(
-                    f"window.location.hash = '#/bond/sentiment-news-detail/area-news/{target_id}'"
-                )
-            else:
-                await page.goto(
-                    f"https://web.innodealing.com/quote-web/#/bond/sentiment-news-detail/area-news/{target_id}",
-                    wait_until="networkidle"
-                )
+            await frame.evaluate(
+                f"window.location.hash = '#/bond/sentiment-news-detail/area-news/{target_id}'"
+            )
             await page.wait_for_timeout(10000)
-            body = await content_target.locator("body").inner_text()
+            body = await frame.locator("body").inner_text()
 
             # Determine output filename
             if find_all and len(matched) > 1:
