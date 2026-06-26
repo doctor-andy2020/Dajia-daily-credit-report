@@ -112,21 +112,30 @@ async def extract_article(keywords, output_file=None, find_all=False, datestr=No
         await frame.evaluate("window.location.hash = '#/bond/public-opinion/important-news'")
         await page.wait_for_timeout(12000)
 
-        # Step 3: Extract articles from API
+        # Step 3: 诊断 — 打印所有截获的 API URL
+        print(f"[3.5] 截获 {len(api_data)} 个 API 响应:")
+        for item in api_data:
+            print(f"      URL: {item['url'][:150]}")
+        if not api_data:
+            print("      ⚠ 未截获任何 API 响应！DM 可能改为 WebSocket 或修改了接口")
+
+        # Step 4: Extract articles from API
         articles = []
         for item in api_data:
             if "sentiment/news/paging" in item["url"]:
                 articles = item["data"].get("data", {}).get("list", [])
+                print(f"      匹配到 sentiment/news/paging: {len(articles)} 条")
                 break
         if not articles:
             for item in api_data:
                 if "headline/list" in item["url"]:
                     articles = item["data"].get("data", [])
+                    print(f"      匹配到 headline/list: {len(articles)} 条")
                     break
 
-        print(f"[4] {len(articles)} articles from API")
+        print(f"[5] {len(articles)} articles from API")
 
-        # Step 4: Search for articles matching keywords (collect ALL)
+        # Step 5: Search for articles matching keywords (collect ALL)
         matched = []  # list of (sentimentId, matched_kw, title)
         seen_ids = set()
         for kw in keywords:
@@ -152,7 +161,7 @@ async def extract_article(keywords, output_file=None, find_all=False, datestr=No
         if not find_all:
             matched = matched[:1]
 
-        # Step 5: Extract each matched article
+        # Step 6: Extract each matched article
         results = []
         for idx, (target_id, matched_kw, article_title) in enumerate(matched):
             print(f"\n[5.{idx+1}/{len(matched)}] Opening article {target_id} — {article_title[:80]}")
