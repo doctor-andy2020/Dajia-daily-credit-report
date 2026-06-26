@@ -172,6 +172,36 @@ async def extract_article(keywords, output_file=None, find_all=False, datestr=No
 
         print(f"[5] {len(articles)} articles from API")
 
+        # ── 诊断：如果文章数为 0，dump API 响应结构以便定位新数据路径 ──
+        if len(articles) == 0:
+            print("[诊断] 文章列表为空，dump API 响应结构：")
+            for i, item in enumerate(api_data):
+                url_short = item["url"][:150]
+                data = item["data"]
+                if isinstance(data, dict):
+                    # 递归打印前两层 key 结构
+                    def dump_structure(d, depth=0):
+                        if not isinstance(d, dict):
+                            return f"<{type(d).__name__}> (len={len(d) if isinstance(d, (list,str)) else '?'})"
+                        lines = []
+                        for k, v in d.items():
+                            prefix = "  " * (depth + 1)
+                            if isinstance(v, dict):
+                                lines.append(f"{prefix}{k}: dict[{', '.join(list(v.keys())[:5])}...]" if len(v)>5 else f"{prefix}{k}: dict[{', '.join(v.keys())}]")
+                            elif isinstance(v, list):
+                                lines.append(f"{prefix}{k}: list[{len(v)}]")
+                                if len(v) > 0 and isinstance(v[0], dict):
+                                    lines.append(f"{prefix}  [0]: dict[{', '.join(list(v[0].keys())[:8])}]")
+                            else:
+                                lines.append(f"{prefix}{k}: {type(v).__name__} = {str(v)[:80]}")
+                        return "\n".join(lines)
+                    print(f"  [{i}] {url_short}")
+                    print(dump_structure(data))
+                    print()
+                else:
+                    print(f"  [{i}] {url_short} — type={type(data).__name__}")
+            print("[诊断] 结构 dump 完毕。")
+
         # Step 5: Search for articles matching keywords (collect ALL)
         matched = []  # list of (sentimentId, matched_kw, title)
         seen_ids = set()
@@ -184,12 +214,14 @@ async def extract_article(keywords, output_file=None, find_all=False, datestr=No
                     seen_ids.add(sid)
                     print(f"    MATCHED '{kw}': {sid} = {title[:100]}")
 
-        if not matched:
+        if not matched and articles:
             print("    Target not found. Available titles:")
             for a in articles[:20]:
                 title = a.get("title", "") or a.get("sentimentTitle", "")
                 sid = a.get("sentimentId", "")
                 print(f"      {sid}: {title[:120]}")
+
+        if not matched:
             await browser.close()
             if find_all:
                 return []
