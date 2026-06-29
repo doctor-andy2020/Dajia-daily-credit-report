@@ -1,11 +1,9 @@
 name: DM Credit Morning Report
 
 on:
-  # 主力定时器：UTC 23:30 = 北京时间 07:30（与舆情日报相同，验证可靠）
-  # DM早报 7:00 已发布，7:30 开始提取，8:30 前完成推送
-  # 周一至周五执行（Sun-Thu UTC）
-  schedule:
-    - cron: '30 23 * * 0-4'
+  # ⚠️ 不设 schedule：DM早报的定时任务统一由 daily-report.yml 的 dm-morning job 承担，
+  #    避免两处 cron 同时触发导致重复发送。
+  #    本 workflow 仅作为 GAS 兜底 / 手动触发入口（workflow_dispatch）。
   workflow_dispatch:
     inputs:
       force:

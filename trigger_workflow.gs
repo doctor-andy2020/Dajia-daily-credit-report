@@ -130,10 +130,18 @@ function triggerDMWorkflow() {
     return 'not_configured';
   }
 
-  // 检查今天是否已有成功 run
-  var check = _checkExistingRun(token, DM_MORNING_WORKFLOW_ID);
-  if (check.skip) {
-    Logger.log('⏭  [DM早报] Skipped: today already has a successful run at ' + check.createdAt);
+  // 去重：DM早报实际由 daily-report.yml 的 dm-morning job 承担，
+  // 所以检查 daily-report.yml 当天是否已成功（成功=舆情+DM两个job都过=DM已发）。
+  // 若 daily-report.yml 失败（含 DM job 失败），这里查不到成功 → 正确触发兜底补发。
+  var checkPrimary = _checkExistingRun(token, DAILY_REPORT_WORKFLOW_ID);
+  if (checkPrimary.skip) {
+    Logger.log('⏭  [DM早报] Skipped: daily-report.yml 今日已成功（DM已随主力发送）at ' + checkPrimary.createdAt);
+    return 'skipped';
+  }
+  // 二次去重：避免本兜底 workflow 自身重复触发
+  var checkSelf = _checkExistingRun(token, DM_MORNING_WORKFLOW_ID);
+  if (checkSelf.skip) {
+    Logger.log('⏭  [DM早报] Skipped: 兜底 workflow 今日已成功 at ' + checkSelf.createdAt);
     return 'skipped';
   }
 
