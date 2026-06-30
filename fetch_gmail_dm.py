@@ -175,9 +175,35 @@ def fetch_emails_for_date(target_date):
         conn.logout()
         return
 
-    # --- 处理第一封匹配邮件 ---
-    mail_id, subject = matched[0]
-    print(f"[处理] {subject}")
+    # --- 从主题提取新闻日期，选最新的一封 ---
+    # 主题格式: 【DM雷达 2026持仓1 重要提醒 共{N}条】 YYYY-MM-DD
+    # 末尾日期 = 新闻日期（比拉取日期早1天），避免跨天延迟时取到旧邮件
+    def extract_news_date(subject):
+        dates = re.findall(r'(\d{4}-\d{2}-\d{2})', subject)
+        if dates:
+            return datetime.datetime.strptime(dates[-1], '%Y-%m-%d').date()
+        return None
+
+    matched_with_date = []
+    for mail_id, subject in matched:
+        news_date = extract_news_date(subject)
+        matched_with_date.append((mail_id, subject, news_date))
+        if news_date:
+            print(f"  [{news_date}] {subject[:80]}...")
+        else:
+            print(f"  [无日期] {subject[:80]}...")
+
+    # 按新闻日期降序排列（最新的在前）
+    matched_with_date.sort(key=lambda x: x[2] if x[2] else datetime.date.min, reverse=True)
+
+    mail_id, subject, news_date = matched_with_date[0]
+    expected_news_date = target_date - datetime.timedelta(days=1)
+    if news_date:
+        gap = abs((news_date - expected_news_date).days)
+        if gap > 2:  # 超过2天差异才警告（周末正常会有1-2天偏差）
+            print(f"[警告] 选中邮件的新闻日期为 {news_date}，期望 {expected_news_date}（目标 {target_date} 的前一天），差距 {gap} 天")
+            print(f"       如果报告内容偏少，请检查邮箱中是否有更匹配的邮件")
+    print(f"[处理] [{news_date}] {subject}")
 
     status, msg_data = conn.fetch(mail_id, "(RFC822)")
     if status != "OK":
