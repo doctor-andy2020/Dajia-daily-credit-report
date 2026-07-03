@@ -146,31 +146,37 @@ async def extract_article(keywords, output_file=None, find_all=False, datestr=No
                     pass
             return []
 
-        articles = []
-        # 优先级1: sentiment/news/paging（舆情新闻分页，这是信用早报所在位置）
-        for item in api_data:
-            if "sentiment/news/paging" in item["url"]:
-                articles = try_extract(item)
-                if articles:
-                    print(f"      ✅ sentiment/news/paging: {len(articles)} 篇")
-                    break
-        # 优先级2: headline/list
-        if not articles:
-            for item in api_data:
-                if "headline/list" in item["url"]:
+        # ── 从所有 API 源收集文章（反向搜索，hash 导航后的新响应优先）──
+        # 登录后 iframe 可能先停在 issuer 详情页（返回 issuer 专属舆情），
+        # hash 导航到 important-news 后触发新 API 追加到列表末尾。
+        # 反向搜索 + 多源收集 确保始终拿到正确的通用舆情数据。
+        all_articles = []  # 所有候选文章
+        collected_urls = set()
+
+        for source_label, url_pattern in [
+            ("sentiment/news/paging", "sentiment/news/paging"),
+            ("headline/list", "headline/list"),
+        ]:
+            for item in reversed(api_data):
+                url_key = item["url"].split("?")[0]
+                if url_pattern in item["url"] and url_key not in collected_urls:
                     articles = try_extract(item)
                     if articles:
-                        print(f"      ✅ headline/list: {len(articles)} 篇")
-                        break
-        # 优先级3: 扫描其他响应
-        if not articles:
-            for item in api_data:
-                articles = try_extract(item)
-                if articles:
-                    print(f"      ✅ 其他接口: {len(articles)} 篇")
-                    break
+                        print(f"      [OK] {source_label}: {len(articles)} 篇")
+                        all_articles.extend(articles)
+                        collected_urls.add(url_key)
+                        break  # 每种源只取最新一次响应
 
-        print(f"[5] {len(articles)} articles from API")
+        # 去重（按 sentimentId）
+        seen_ids = set()
+        articles = []
+        for a in all_articles:
+            sid = a.get("sentimentId", "") or a.get("id", "") or a.get("newsId", "")
+            if sid and sid not in seen_ids:
+                articles.append(a)
+                seen_ids.add(sid)
+
+        print(f"[5] {len(articles)} articles from API (combined from {len(collected_urls)} sources)")
 
         # ── 诊断：如果文章数为 0，dump API 响应结构以便定位新数据路径 ──
         if len(articles) == 0:
