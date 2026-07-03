@@ -24,7 +24,7 @@ SMTP_SERVER = "smtp.gmail.com"
 SMTP_PORT = 587
 SENDER = os.environ.get("EMAIL_ACCOUNT", "")
 PASSWORD = os.environ.get("EMAIL_PASSWORD", "")  # Gmail 应用专用密码
-RECIPIENTS = os.environ.get("EMAIL_RECIPIENTS", "mengsiqi@djbx.com,lizhibo@djbx.com").split(",")
+RECIPIENTS = os.environ.get("EMAIL_RECIPIENTS", "mengsiqi@djbx.com,lizhibo@djbx.com,gr_zc_xypg@djbx.com").split(",")
 
 
 def md_to_html(md_path):
