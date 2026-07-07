@@ -40,7 +40,46 @@ jobs:
 
       - run: python -m playwright install chromium
 
+      # ── 前置检查（bash 层，日志可见）──
+      - name: DM早报 — 前置检查
+        id: dm-check
+        continue-on-error: true
+        run: |
+          TODAY_BJ=$(TZ=Asia/Shanghai date +%Y-%m-%d)
+          DATESTR=$(TZ=Asia/Shanghai date +%Y%m%d)
+          WEEKDAY=$(TZ=Asia/Shanghai date +%u)
+          HOUR_BJ=$(TZ=Asia/Shanghai date +%H)
+          HOUR_BJ=$((10#${HOUR_BJ}))
+          echo "北京时间: ${TODAY_BJ} 周${WEEKDAY} ${HOUR_BJ}时"
+
+          # 检查1: 时间窗口（北京时间 07:00-10:00）
+          if [ "$HOUR_BJ" -lt 7 ] || [ "$HOUR_BJ" -ge 10 ]; then
+            echo "[跳过] 当前北京时间 ${HOUR_BJ}时，不在执行窗口(07:00-10:00)内。"
+            echo "skip=true" >> $GITHUB_OUTPUT
+            exit 0
+          fi
+          echo "[通过] 时间窗口检查通过 (${HOUR_BJ}时)"
+
+          # 检查2: 周末跳过
+          if [ "$WEEKDAY" -ge 6 ]; then
+            echo "[跳过] 周末不执行"
+            echo "skip=true" >> $GITHUB_OUTPUT
+            exit 0
+          fi
+
+          # 检查3: sentinel 去重
+          SENTINEL=".dm_sentinel_${DATESTR}"
+          if [ -f "$SENTINEL" ]; then
+            echo "[跳过] 今日已发送 (sentinel: ${SENTINEL})"
+            echo "skip=true" >> $GITHUB_OUTPUT
+            exit 0
+          fi
+          echo "[通过] sentinel 去重检查通过"
+
+          echo "skip=false" >> $GITHUB_OUTPUT
+
       - name: Run DM morning pipeline
+        if: steps.dm-check.outputs.skip != 'true'
         env:
           TZ: Asia/Shanghai
           EMAIL_ACCOUNT: ${{ secrets.EMAIL_ACCOUNT }}
