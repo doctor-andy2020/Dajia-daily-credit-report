@@ -27,19 +27,18 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      # ── 跨 run 去重：当天已有成功/进行中 run 则跳过 ──
-      # 去重针对 cron 触发；workflow_dispatch (GAS兜底/手动) 始终放行
+      # ── 跨 run 去重：当天已有成功/进行中/排队 run 则跳过 ──
+      # 对所有触发方式生效（schedule + workflow_dispatch），防止 GAS 竞态重复
       - name: Check existing run today (dedup)
         id: dedup
-        if: github.event_name == 'schedule'
         run: |
           TODAY_BJ=$(TZ=Asia/Shanghai date +%Y-%m-%d)
           echo "Beijing today: $TODAY_BJ"
-          # 查成功 run
+          # 查成功 run（当前 run 不可能是 success，无需排除自身）
           SUCCESS=$(gh run list --workflow="${{ github.workflow }}" --branch=master --status=success --limit=10 --json createdAt --jq ".[] | select(.createdAt >= \"${TODAY_BJ}\") | .createdAt")
-          # 查进行中/排队中的 run
-          ACTIVE=$(gh run list --workflow="${{ github.workflow }}" --branch=master --status=in_progress --limit=10 --json createdAt --jq ".[] | select(.createdAt >= \"${TODAY_BJ}\") | .createdAt")
-          QUEUED=$(gh run list --workflow="${{ github.workflow }}" --branch=master --status=queued --limit=5 --json createdAt --jq ".[] | select(.createdAt >= \"${TODAY_BJ}\") | .createdAt")
+          # 查进行中/排队中的 run（需排除自身，否则 workflow_dispatch 会匹配到自己）
+          ACTIVE=$(gh run list --workflow="${{ github.workflow }}" --branch=master --status=in_progress --limit=10 --json databaseId,createdAt --jq ".[] | select(.createdAt >= \"${TODAY_BJ}\" and .databaseId != ${{ github.run_id }}) | .createdAt")
+          QUEUED=$(gh run list --workflow="${{ github.workflow }}" --branch=master --status=queued --limit=5 --json databaseId,createdAt --jq ".[] | select(.createdAt >= \"${TODAY_BJ}\" and .databaseId != ${{ github.run_id }}) | .createdAt")
           if [ -n "$SUCCESS" ]; then
             echo "Today's report already completed successfully ($SUCCESS). Skipping."
             echo "skip=true" >> $GITHUB_OUTPUT

@@ -37,25 +37,31 @@ function _getToken() {
 }
 
 function _checkExistingRun(token, workflowId) {
-  // 检查今天是否已有成功 run
-  var runsUrl = 'https://api.github.com/repos/doctor-andy2020/Dajia-daily-credit-report/actions/runs'
-    + '?branch=master&status=success&per_page=10'
-    + '&workflow_id=' + workflowId;
+  // 检查今天是否已有成功/进行中/排队的 run
+  //   - success: 已跑完，无需再触发
+  //   - in_progress / queued: 正在跑或等待中，再触发会造成竞态重复
+  var statuses = ['success', 'in_progress', 'queued'];
+  var today = Utilities.formatDate(new Date(), 'Asia/Shanghai', 'yyyy-MM-dd');
   var headers = {
     'Authorization': 'Bearer ' + token,
     'Accept': 'application/vnd.github+json',
     'Content-Type': 'application/json',
   };
 
-  var runsResp = UrlFetchApp.fetch(runsUrl, { headers: headers, muteHttpExceptions: true });
-  if (runsResp.getResponseCode() === 200) {
-    var data = JSON.parse(runsResp.getContentText());
-    var runs = data.workflow_runs || [];
-    var today = Utilities.formatDate(new Date(), 'Asia/Shanghai', 'yyyy-MM-dd');
-    for (var i = 0; i < runs.length; i++) {
-      var createdAt = runs[i].created_at;
-      if (createdAt && createdAt.indexOf(today) === 0) {
-        return { skip: true, createdAt: createdAt };
+  for (var s = 0; s < statuses.length; s++) {
+    var runsUrl = 'https://api.github.com/repos/doctor-andy2020/Dajia-daily-credit-report/actions/runs'
+      + '?branch=master&status=' + statuses[s] + '&per_page=10'
+      + '&workflow_id=' + workflowId;
+
+    var runsResp = UrlFetchApp.fetch(runsUrl, { headers: headers, muteHttpExceptions: true });
+    if (runsResp.getResponseCode() === 200) {
+      var data = JSON.parse(runsResp.getContentText());
+      var runs = data.workflow_runs || [];
+      for (var i = 0; i < runs.length; i++) {
+        var createdAt = runs[i].created_at;
+        if (createdAt && createdAt.indexOf(today) === 0) {
+          return { skip: true, createdAt: createdAt, status: statuses[s] };
+        }
       }
     }
   }
@@ -94,7 +100,7 @@ function triggerWorkflow() {
   // 检查今天是否已有成功 run
   var check = _checkExistingRun(token, DAILY_REPORT_WORKFLOW_ID);
   if (check.skip) {
-    Logger.log('⏭  [舆情日报] Skipped: today already has a successful run at ' + check.createdAt);
+    Logger.log('⏭  [舆情日报] Skipped: today already has a ' + (check.status || 'success') + ' run at ' + check.createdAt);
     return 'skipped';
   }
 

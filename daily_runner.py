@@ -105,8 +105,11 @@ def main():
         if success:
             html_files.append(html_file)
         elif html_file.exists():
-            print(f"[警告] 拉取失败，使用已有缓存: {html_file}")
-            html_files.append(html_file)
+            # 不复用当天日期的旧缓存 — 可能是前一次错误拉取留下的过期数据
+            # 让流程失败，由 GAS 兜底触发器在 8:00-9:00 重试
+            print(f"[错误] 拉取失败，拒绝复用旧缓存: {html_file}")
+            print(f"       （旧缓存可能是过期数据，由 GAS 兜底触发器负责重试）")
+            sys.exit(1)
 
     if not html_files:
         print("[错误] 没有可用的邮件HTML文件，无法继续。")

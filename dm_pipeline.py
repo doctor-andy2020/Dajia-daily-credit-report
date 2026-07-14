@@ -246,9 +246,9 @@ async def extract_article(keywords, output_file=None, find_all=False, datestr=No
             await page.wait_for_timeout(10000)
             body = await frame.locator("body").inner_text()
 
-            # Determine output filename
-            if find_all and len(matched) > 1:
-                # Auto-name by article type
+            # Determine output filename — always use type-based naming with --all
+            if find_all:
+                # Auto-name by article type (even for single match)
                 if "要闻速览" in article_title:
                     fname = f"dm_yaowen_{datestr}.txt" if datestr else "dm_yaowen_output.txt"
                 elif "信用早报" in article_title or "早报" in article_title:

@@ -29,7 +29,7 @@ SMTP_SERVER = "smtp.gmail.com"
 SMTP_PORT = 587
 SENDER = os.environ.get("EMAIL_ACCOUNT", "")
 PASSWORD = os.environ.get("EMAIL_PASSWORD", "")
-RECIPIENTS = os.environ.get("EMAIL_RECIPIENTS", "mengsiqi@djbx.com,lizhibo@djbx.com").split(",")
+RECIPIENTS = os.environ.get("EMAIL_RECIPIENTS", "lizhibo@djbx.com,CUIHAOXIONG@DJBX.COM,gushiping@djbx.com,GUWEIJUN@DJBX.COM,DJ013276HAOJIAJI@DJBX.COM,KONGNING@DJBX.COM,licanghui@djbx.com,dj009974liudeyuan@djbx.com,MENGSIQI@DJBX.COM,XIAOYI@DJBX.COM").split(",")
 
 
 def beijing_now():
@@ -179,6 +179,16 @@ def main():
 
     for f in today_dm:
         print(f"[信息] DM 早报 DOCX: {f}")
+
+    # ── 守卫：至少需要一份信用早报，不能只用要闻速览凑数 ──
+    # cron 延迟到下午时，信用早报已从文章列表消失，可能只匹配到下午发布的要闻速览。
+    # 要闻速览格式不同，解析器无法正确处理（sections=0），导致空报告。
+    zaobao_files = [f for f in today_dm if f.name.startswith('DM早报_')]
+    if not zaobao_files:
+        print("[错误] 未找到 DM 信用早报（DM早报_*.docx），仅有要闻速览或其他文件。")
+        print("        信用早报可能已被下午发布的文章挤出 DM 文章列表。")
+        print("        拒绝发送，避免空报告。")
+        sys.exit(1)
 
     # Step 2: 发送邮件
     report_date = today.strftime('%Y年%m月%d日')

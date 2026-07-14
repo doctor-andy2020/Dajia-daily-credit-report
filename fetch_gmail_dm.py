@@ -137,13 +137,13 @@ def fetch_emails_for_date(target_date):
         sys.exit(1)
 
     # --- 搜索邮件（日期范围，容错时区差异）---
-    # Gmail IMAP 使用服务器内部日期（受发件/收件时区影响），
-    # 用 SINCE...BEFORE 范围搜索比 ON 精确日期更可靠
-    yesterday = target_date - datetime.timedelta(days=1)
-    tomorrow = target_date + datetime.timedelta(days=1)
-    since_str = yesterday.strftime("%d-%b-%Y")
-    before_str = tomorrow.strftime("%d-%b-%Y")
-    print(f"[搜索] 日期范围 {since_str} → {before_str} ...")
+    # 宽窗口搜索（5天），确保捕获所有候选邮件
+    # 精确匹配逻辑会从候选中挑出正确的那封，窗口宽不影响准确性
+    search_start = target_date - datetime.timedelta(days=5)
+    search_end = target_date + datetime.timedelta(days=2)
+    since_str = search_start.strftime("%d-%b-%Y")
+    before_str = search_end.strftime("%d-%b-%Y")
+    print(f"[搜索] 日期范围 {since_str} → {before_str}（宽窗口，确保不漏邮件） ...")
     status, message_ids = conn.search(None, f'(SINCE "{since_str}" BEFORE "{before_str}")')
     if status != "OK":
         print("[错误] 搜索失败。")
@@ -171,13 +171,13 @@ def fetch_emails_for_date(target_date):
     print(f"[结果] 找到 {len(matched)} 封匹配邮件。")
 
     if len(matched) == 0:
-        print("[写入] 无匹配邮件。")
+        print("[错误] 无匹配邮件（关键词: {}）。".format(KEYWORD))
         conn.logout()
-        return
+        return False
 
-    # --- 从主题提取新闻日期，选最新的一封 ---
+    # --- 从主题提取新闻日期，按期望日期精确匹配 ---
     # 主题格式: 【DM雷达 2026持仓1 重要提醒 共{N}条】 YYYY-MM-DD
-    # 末尾日期 = 新闻日期（比拉取日期早1天），避免跨天延迟时取到旧邮件
+    # 末尾日期 = 新闻日期（DM邮件凌晨1:12送达，news_date = 送达日前一天）
     def extract_news_date(subject):
         dates = re.findall(r'(\d{4}-\d{2}-\d{2})', subject)
         if dates:
@@ -193,17 +193,33 @@ def fetch_emails_for_date(target_date):
         else:
             print(f"  [无日期] {subject[:80]}...")
 
-    # 按新闻日期降序排列（最新的在前）
-    matched_with_date.sort(key=lambda x: x[2] if x[2] else datetime.date.min, reverse=True)
+    # 构建按 news_date 索引的查找表
+    by_news_date = {}
+    for mail_id, subject, news_date in matched_with_date:
+        if news_date is not None:
+            by_news_date.setdefault(news_date, []).append((mail_id, subject))
 
-    mail_id, subject, news_date = matched_with_date[0]
     expected_news_date = target_date - datetime.timedelta(days=1)
-    if news_date:
-        gap = abs((news_date - expected_news_date).days)
-        if gap > 2:  # 超过2天差异才警告（周末正常会有1-2天偏差）
-            print(f"[警告] 选中邮件的新闻日期为 {news_date}，期望 {expected_news_date}（目标 {target_date} 的前一天），差距 {gap} 天")
-            print(f"       如果报告内容偏少，请检查邮箱中是否有更匹配的邮件")
-    print(f"[处理] [{news_date}] {subject}")
+    print(f"[匹配] 期望新闻日期: {expected_news_date}，可用日期: {sorted(by_news_date.keys(), reverse=True)}")
+
+    # ── 精确匹配期望新闻日期，找不到则直接失败，不降级 ──
+    # 非周一：expected_news_date = target_date - 1
+    # 周一：由 daily_runner.py 传多个 --date，每个分别精确匹配
+    if expected_news_date not in by_news_date:
+        print(f"[错误] ========================================")
+        print(f"[错误] 未找到新闻日期为 {expected_news_date} 的邮件！")
+        print(f"[错误] 可用日期: {sorted(by_news_date.keys(), reverse=True) if by_news_date else '(无)'}")
+        print(f"[错误] 不降级使用其他日期的邮件，流程终止。")
+        print(f"[错误] ========================================")
+        conn.logout()
+        sys.exit(1)
+
+    candidates = by_news_date[expected_news_date]
+    mail_id, subject = candidates[0]
+    news_date = expected_news_date
+    if len(candidates) > 1:
+        print(f"[匹配] {expected_news_date} 有 {len(candidates)} 封匹配邮件，取第一封")
+    print(f"[精确匹配] [{news_date}] {subject}")
 
     status, msg_data = conn.fetch(mail_id, "(RFC822)")
     if status != "OK":
