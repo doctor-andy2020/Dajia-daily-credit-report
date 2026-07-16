@@ -1,10 +1,8 @@
 name: DM Credit Morning Report
 
 on:
-  # 主力定时器：UTC 23:30 = 北京时间 07:30（工作日）
-  # GitHub cron 可能延迟 40-80 分钟，GAS 触发器 8-9 点作为兜底
-  schedule:
-    - cron: '30 23 * * 0-4'
+  # ⚠️ 不设 schedule：DM早报主力由 daily-report.yml (GAS 08:12) 一并触发。
+  #    本 workflow 仅作为 GAS triggerDMWorkflow 兜底 / 手动触发入口。
   workflow_dispatch:
     inputs:
       force:
@@ -68,25 +66,7 @@ jobs:
             exit 0
           fi
 
-          # 检查3: 跨 workflow 去重 — DM早报可能已随 daily-report.yml (GAS 08:12) 发送
-          if [[ "${{ github.event_name }}" == "schedule" ]]; then
-            echo "[schedule] 跨 workflow 去重：检查 daily-report.yml 是否已成功/进行中..."
-            # daily-report.yml workflow ID = 292559747
-            DAILY_SUCCESS=$(gh run list --workflow=292559747 --branch=master --status=success --limit=5 --json createdAt --jq ".[] | select(.createdAt >= \"${TODAY_BJ}\") | .createdAt" 2>/dev/null)
-            DAILY_ACTIVE=$(gh run list --workflow=292559747 --branch=master --status=in_progress --limit=5 --json databaseId,createdAt --jq ".[] | select(.createdAt >= \"${TODAY_BJ}\" and .databaseId != ${{ github.run_id }}) | .createdAt" 2>/dev/null)
-            if [ -n "$DAILY_SUCCESS" ]; then
-              echo "[跳过] DM早报已随 daily-report.yml 发送 (at $DAILY_SUCCESS)"
-              echo "skip=true" >> $GITHUB_OUTPUT
-              exit 0
-            elif [ -n "$DAILY_ACTIVE" ]; then
-              echo "[跳过] daily-report.yml 正在运行中 (at $DAILY_ACTIVE)，不重复触发"
-              echo "skip=true" >> $GITHUB_OUTPUT
-              exit 0
-            fi
-            echo "[通过] daily-report.yml 今日未成功且无进行中 run，DM早报需补发"
-          fi
-
-          # 检查4: sentinel 去重
+          # 检查3: sentinel 去重
           SENTINEL=".dm_sentinel_${DATESTR}"
           if [ -f "$SENTINEL" ]; then
             echo "[跳过] 今日已发送 (sentinel: ${SENTINEL})"
