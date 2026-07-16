@@ -1,12 +1,9 @@
-name: Dajia Daily Credit Report（舆情日报 + DM早报双Job）
+name: Dajia Daily Credit Report（舆情日报）
 
 on:
-  # 主力定时器：UTC 23:30 = 北京时间 07:30
-  # Job 1: 舆情日报（邮件IMAP）  Job 2: DM信用早报（DM终端Playwright）
-  # 两个 Job 并行执行，独立发送邮件
-  # GAS 触发器 8-9 点作为兜底
-  schedule:
-    - cron: '30 23 * * 0-4'
+  # ⚠️ 不设 schedule：舆情日报仅由 GAS (BJ 08:12) 触发，
+  #    GitHub cron 延迟 40-80 分钟不可靠，已移除。
+  #    DM早报已独立为 dm-morning-report.yml。
   workflow_dispatch:
     inputs:
       force:
@@ -20,7 +17,7 @@ permissions:
   contents: read
 
 jobs:
-  # ── Job 1: 舆情日报（邮件 IMAP → 解析 → 报告 → 发送）──
+  # ── 舆情日报（邮件 IMAP → 解析 → 报告 → 发送）──
   daily:
     runs-on: ubuntu-latest
     timeout-minutes: 10
@@ -28,7 +25,6 @@ jobs:
       - uses: actions/checkout@v4
 
       # ── 跨 run 去重：当天已有成功/进行中/排队 run 则跳过 ──
-      # 对所有触发方式生效（schedule + workflow_dispatch），防止 GAS 竞态重复
       - name: Check existing run today (dedup)
         id: dedup
         run: |
@@ -63,7 +59,6 @@ jobs:
         with:
           python-version: "3.12"
 
-      # ── 缓存加速：pip 依赖 ──
       - uses: actions/cache@v4
         with:
           path: ~/.cache/pip
@@ -91,126 +86,4 @@ jobs:
           path: |
             【大家资产持仓信用主体舆情日报】_*.md
             【大家资产持仓信用主体舆情日报】_*.docx
-          retention-days: 7
-
-  # ── Job 2: DM信用早报（DM终端 Playwright → 提取 → DOCX → 发送）──
-  # 挂在同一个 cron 下确保可靠性（DM 独立 workflow 的 cron 存在 GitHub 已知问题）
-  dm-morning:
-    runs-on: ubuntu-latest
-    timeout-minutes: 15
-    steps:
-      - uses: actions/checkout@v4
-
-      - uses: actions/setup-python@v5
-        with:
-          python-version: "3.12"
-
-      - uses: actions/cache@v4
-        with:
-          path: ~/.cache/pip
-          key: pip-${{ runner.os }}-${{ hashFiles('requirements.txt') }}
-          restore-keys: pip-${{ runner.os }}-
-
-      - run: pip install -r requirements.txt
-
-      - uses: actions/cache@v4
-        with:
-          path: ~/.cache/ms-playwright
-          key: playwright-${{ runner.os }}-chromium
-          restore-keys: playwright-${{ runner.os }}-
-
-      - run: python -m playwright install chromium
-
-      # ── 检查是否应该执行（所有判断在 bash 层，日志可见）──
-      - name: DM早报 — 前置检查
-        id: dm-check
-        env:
-          GH_TOKEN: ${{ github.token }}
-        continue-on-error: true
-        run: |
-          TODAY_BJ=$(TZ=Asia/Shanghai date +%Y-%m-%d)
-          DATESTR=$(TZ=Asia/Shanghai date +%Y%m%d)
-          WEEKDAY=$(TZ=Asia/Shanghai date +%u)  # 1=Mon, 7=Sun
-          HOUR_BJ=$(TZ=Asia/Shanghai date +%H)
-          HOUR_BJ=$((10#${HOUR_BJ}))  # 去掉前导零，避免 bash 八进制错误
-          echo "北京时间: ${TODAY_BJ} 周${WEEKDAY} ${HOUR_BJ}时"
-          echo "today=${TODAY_BJ}" >> $GITHUB_OUTPUT
-          echo "datestr=${DATESTR}" >> $GITHUB_OUTPUT
-
-          # 检查1: 周末跳过
-          if [ "$WEEKDAY" -ge 6 ]; then
-            echo "[跳过] 周末不执行"
-            echo "skip=true" >> $GITHUB_OUTPUT
-            exit 0
-          fi
-
-          # 检查2: 时间窗口（北京时间 07:00-10:00）
-          #   防止 cron 延迟到下午 / 手动误触 / GAS 异常触发导致非正常时段发送
-          if [ "$HOUR_BJ" -lt 7 ] || [ "$HOUR_BJ" -ge 10 ]; then
-            echo "[跳过] 当前北京时间 ${HOUR_BJ}时，不在执行窗口(07:00-10:00)内。"
-            echo "skip=true" >> $GITHUB_OUTPUT
-            exit 0
-          fi
-          echo "[通过] 时间窗口检查通过 (${HOUR_BJ}时)"
-
-          # 检查3: 去重
-          #   (A) schedule (cron) → API 级别查当天是否已有成功 run
-          #       因为每个 run 是全新 checkout，sentinel 文件跨 run 无效。
-          #       cron 可能延迟数小时触发（GitHub 已知问题），此时早上
-          #       已通过 GAS/workflow_dispatch 成功发送过，必须拦截。
-          #   (B) workflow_dispatch (GAS/手动) → sentinel 文件检查
-          #       作为同机重复运行的基本防护。
-          if [[ "${{ github.event_name }}" == "schedule" ]]; then
-            echo "[schedule] API 去重：检查当天是否已有成功/进行中的 run..."
-            HAS_SUCCESS=$(gh run list --workflow="${{ github.workflow }}" --branch=master --status=success --limit=10 --json createdAt --jq ".[] | select(.createdAt >= \"${TODAY_BJ}\") | .createdAt" 2>/dev/null)
-            HAS_ACTIVE=$(gh run list --workflow="${{ github.workflow }}" --branch=master --status=in_progress --limit=10 --json databaseId,createdAt --jq ".[] | select(.createdAt >= \"${TODAY_BJ}\" and .databaseId != ${{ github.run_id }}) | .createdAt" 2>/dev/null)
-            HAS_QUEUED=$(gh run list --workflow="${{ github.workflow }}" --branch=master --status=queued --limit=5 --json databaseId,createdAt --jq ".[] | select(.createdAt >= \"${TODAY_BJ}\" and .databaseId != ${{ github.run_id }}) | .createdAt" 2>/dev/null)
-
-            if [ -n "$HAS_SUCCESS" ]; then
-              echo "[跳过] 今日 DM 早报已成功发送过 (at $HAS_SUCCESS)"
-              echo "skip=true" >> $GITHUB_OUTPUT
-              exit 0
-            elif [ -n "$HAS_ACTIVE" ] || [ -n "$HAS_QUEUED" ]; then
-              echo "[跳过] 今日已有进行中/排队中的 run，避免竞争"
-              echo "skip=true" >> $GITHUB_OUTPUT
-              exit 0
-            fi
-            echo "[通过] API 去重检查通过"
-          else
-            SENTINEL=".dm_sentinel_${DATESTR}"
-            if [ -f "$SENTINEL" ]; then
-              echo "[跳过] 今日已发送 (sentinel: ${SENTINEL})"
-              echo "skip=true" >> $GITHUB_OUTPUT
-              exit 0
-            fi
-            echo "[通过] sentinel 去重检查通过"
-          fi
-
-          echo "skip=false" >> $GITHUB_OUTPUT
-
-      - name: DM早报 — 提取与发送
-        if: steps.dm-check.outputs.skip != 'true'
-        env:
-          TZ: Asia/Shanghai
-          EMAIL_ACCOUNT: ${{ secrets.EMAIL_ACCOUNT }}
-          EMAIL_PASSWORD: ${{ secrets.EMAIL_PASSWORD }}
-          EMAIL_RECIPIENTS: ${{ secrets.EMAIL_RECIPIENTS }}
-          DM_USER: ${{ secrets.DM_USER }}
-          DM_PASS: ${{ secrets.DM_PASS }}
-        run: |
-          # cron 触发时不加 --force，让 Python 的时间窗口检查作为第二道防线
-          # 仅当手动触发且明确传入 force=true 时才跳过所有检查
-          if [[ "${{ github.event_name }}" == "workflow_dispatch" && "${{ inputs.force }}" == "true" ]]; then
-            python dm_morning_runner.py --force
-          else
-            python dm_morning_runner.py
-          fi
-
-      - uses: actions/upload-artifact@v4
-        if: always()
-        with:
-          name: dm-morning-report
-          path: |
-            DM早报_*.docx
-            DM要闻速览_*.docx
           retention-days: 7

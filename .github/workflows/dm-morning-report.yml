@@ -1,9 +1,10 @@
 name: DM Credit Morning Report
 
 on:
-  # ⚠️ 不设 schedule：DM早报的定时任务统一由 daily-report.yml 的 dm-morning job 承担，
-  #    避免两处 cron 同时触发导致重复发送。
-  #    本 workflow 仅作为 GAS 兜底 / 手动触发入口（workflow_dispatch）。
+  # 主力定时器：UTC 23:30 = 北京时间 07:30（工作日）
+  # GitHub cron 可能延迟 40-80 分钟，GAS 触发器 8-9 点作为兜底
+  schedule:
+    - cron: '30 23 * * 0-4'
   workflow_dispatch:
     inputs:
       force:

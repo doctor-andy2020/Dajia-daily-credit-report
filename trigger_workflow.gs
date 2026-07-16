@@ -90,14 +90,37 @@ function _dispatchWorkflow(token, workflowId) {
 // ============================================================
 // 舆情日报触发器（北京时间 8:00-9:00）
 // ============================================================
-// 舆情日报 GAS 兜底 — 已关闭（2026-07-17）
-// 原因：GitHub cron 每天可靠触发，GAS 与其竞态导致重复发送。
-//       GAS 仅保留 DM 早报兜底（triggerDMWorkflow）。
-// 如需恢复：删除下面的 return 即可。
+// 舆情日报触发器（北京时间 8:00-9:00）— 主力触发源
+// 原因：GitHub cron 延迟 40-80 分钟不可靠，GAS 每天 08:12 准时。
+//       舆情日报仅依赖 GAS 触发，cron 已从 daily-report.yml 中移除。
 // ============================================================
 function triggerWorkflow() {
-  Logger.log('⏭  [舆情日报] GAS 兜底已关闭。仅依赖 GitHub cron (BJ 07:30)。');
-  return 'disabled';
+  var token = _getToken();
+  if (!token) {
+    Logger.log('❌ GITHUB_TOKEN not found.');
+    return 'no_token';
+  }
+
+  // 检查今天是否已有成功 run
+  var check = _checkExistingRun(token, DAILY_REPORT_WORKFLOW_ID);
+  if (check.skip) {
+    Logger.log('⏭  [舆情日报] Skipped: today already has a ' + (check.status || 'success') + ' run at ' + check.createdAt);
+    return 'skipped';
+  }
+
+  // 调度 workflow
+  var status = _dispatchWorkflow(token, DAILY_REPORT_WORKFLOW_ID);
+
+  Logger.log('[舆情日报] Trigger time: ' + new Date().toLocaleString('zh-CN', { timeZone: 'Asia/Shanghai' }));
+  Logger.log('[舆情日报] HTTP Status: ' + status);
+
+  if (status === 204) {
+    Logger.log('✅ [舆情日报] Workflow triggered successfully');
+  } else {
+    Logger.log('❌ [舆情日报] Failed (status: ' + status + ')');
+  }
+
+  return status;
 }
 
 
