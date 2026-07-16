@@ -215,7 +215,8 @@ async def extract_article(keywords, output_file=None, find_all=False, datestr=No
             for a in articles:
                 title = a.get("title", "") or a.get("sentimentTitle", "")
                 sid = a.get("sentimentId", "")
-                if sid and sid not in seen_ids and kw in title:
+                # 忽略空格匹配：DM 标题格式可能变化（"DM信用早报0716" vs "DM信用早报 0716"）
+                if sid and sid not in seen_ids and kw.replace(" ", "") in title.replace(" ", ""):
                     matched.append((sid, kw, title))
                     seen_ids.add(sid)
                     print(f"    MATCHED '{kw}': {sid} = {title[:100]}")
