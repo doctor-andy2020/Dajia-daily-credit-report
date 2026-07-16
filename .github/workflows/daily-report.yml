@@ -1,9 +1,9 @@
-name: Dajia Daily Credit Report（舆情日报）
+name: Dajia Daily Credit Report（舆情日报 + DM早报双Job）
 
 on:
-  # ⚠️ 不设 schedule：舆情日报仅由 GAS (BJ 08:12) 触发，
+  # ⚠️ 不设 schedule：GAS triggerWorkflow (BJ 08:12) 是唯一定时触发源，
   #    GitHub cron 延迟 40-80 分钟不可靠，已移除。
-  #    DM早报已独立为 dm-morning-report.yml。
+  #    DM早报的 cron 兜底保留在 dm-morning-report.yml。
   workflow_dispatch:
     inputs:
       force:
@@ -11,13 +11,12 @@ on:
         type: boolean
         default: false
 
-# 允许 workflow 通过 gh CLI 查询自身运行历史（去重用）
 permissions:
   actions: read
   contents: read
 
 jobs:
-  # ── 舆情日报（邮件 IMAP → 解析 → 报告 → 发送）──
+  # ── Job 1: 舆情日报（邮件 IMAP → 解析 → 报告 → 发送）──
   daily:
     runs-on: ubuntu-latest
     timeout-minutes: 10
@@ -30,9 +29,7 @@ jobs:
         run: |
           TODAY_BJ=$(TZ=Asia/Shanghai date +%Y-%m-%d)
           echo "Beijing today: $TODAY_BJ"
-          # 查成功 run（当前 run 不可能是 success，无需排除自身）
           SUCCESS=$(gh run list --workflow="${{ github.workflow }}" --branch=master --status=success --limit=10 --json createdAt --jq ".[] | select(.createdAt >= \"${TODAY_BJ}\") | .createdAt")
-          # 查进行中/排队中的 run（需排除自身，否则 workflow_dispatch 会匹配到自己）
           ACTIVE=$(gh run list --workflow="${{ github.workflow }}" --branch=master --status=in_progress --limit=10 --json databaseId,createdAt --jq ".[] | select(.createdAt >= \"${TODAY_BJ}\" and .databaseId != ${{ github.run_id }}) | .createdAt")
           QUEUED=$(gh run list --workflow="${{ github.workflow }}" --branch=master --status=queued --limit=5 --json databaseId,createdAt --jq ".[] | select(.createdAt >= \"${TODAY_BJ}\" and .databaseId != ${{ github.run_id }}) | .createdAt")
           if [ -n "$SUCCESS" ]; then
@@ -86,4 +83,91 @@ jobs:
           path: |
             【大家资产持仓信用主体舆情日报】_*.md
             【大家资产持仓信用主体舆情日报】_*.docx
+          retention-days: 7
+
+  # ── Job 2: DM信用早报（DM终端 Playwright → 提取 → DOCX → 发送）──
+  dm-morning:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - uses: actions/cache@v4
+        with:
+          path: ~/.cache/pip
+          key: pip-${{ runner.os }}-${{ hashFiles('requirements.txt') }}
+          restore-keys: pip-${{ runner.os }}-
+
+      - run: pip install -r requirements.txt
+
+      - uses: actions/cache@v4
+        with:
+          path: ~/.cache/ms-playwright
+          key: playwright-${{ runner.os }}-chromium
+          restore-keys: playwright-${{ runner.os }}-
+
+      - run: python -m playwright install chromium
+
+      # ── 前置检查：由 GAS 触发（workflow_dispatch），sentinel 去重 ──
+      - name: DM早报 — 前置检查
+        id: dm-check
+        continue-on-error: true
+        run: |
+          TODAY_BJ=$(TZ=Asia/Shanghai date +%Y-%m-%d)
+          DATESTR=$(TZ=Asia/Shanghai date +%Y%m%d)
+          WEEKDAY=$(TZ=Asia/Shanghai date +%u)
+          HOUR_BJ=$(TZ=Asia/Shanghai date +%H)
+          HOUR_BJ=$((10#${HOUR_BJ}))
+          echo "北京时间: ${TODAY_BJ} 周${WEEKDAY} ${HOUR_BJ}时"
+          echo "today=${TODAY_BJ}" >> $GITHUB_OUTPUT
+          echo "datestr=${DATESTR}" >> $GITHUB_OUTPUT
+
+          # 检查1: 周末跳过
+          if [ "$WEEKDAY" -ge 6 ]; then
+            echo "[跳过] 周末不执行"
+            echo "skip=true" >> $GITHUB_OUTPUT
+            exit 0
+          fi
+
+          # 检查2: 时间窗口
+          if [ "$HOUR_BJ" -lt 7 ] || [ "$HOUR_BJ" -ge 10 ]; then
+            echo "[跳过] 当前北京时间 ${HOUR_BJ}时，不在执行窗口(07:00-10:00)内。"
+            echo "skip=true" >> $GITHUB_OUTPUT
+            exit 0
+          fi
+          echo "[通过] 时间窗口检查通过 (${HOUR_BJ}时)"
+
+          # 检查3: sentinel 去重（本 workflow 为 GAS workflow_dispatch 触发）
+          SENTINEL=".dm_sentinel_${DATESTR}"
+          if [ -f "$SENTINEL" ]; then
+            echo "[跳过] 今日已发送 (sentinel: ${SENTINEL})"
+            echo "skip=true" >> $GITHUB_OUTPUT
+            exit 0
+          fi
+          echo "[通过] sentinel 去重检查通过"
+
+          echo "skip=false" >> $GITHUB_OUTPUT
+
+      - name: DM早报 — 提取与发送
+        if: steps.dm-check.outputs.skip != 'true'
+        env:
+          TZ: Asia/Shanghai
+          EMAIL_ACCOUNT: ${{ secrets.EMAIL_ACCOUNT }}
+          EMAIL_PASSWORD: ${{ secrets.EMAIL_PASSWORD }}
+          EMAIL_RECIPIENTS: ${{ secrets.EMAIL_RECIPIENTS }}
+          DM_USER: ${{ secrets.DM_USER }}
+          DM_PASS: ${{ secrets.DM_PASS }}
+        run: python dm_morning_runner.py
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: dm-morning-report
+          path: |
+            DM早报_*.docx
+            DM要闻速览_*.docx
           retention-days: 7
