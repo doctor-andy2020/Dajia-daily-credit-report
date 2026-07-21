@@ -110,9 +110,11 @@ def fetch_emails_for_date(target_date):
         print("[错误] 请通过环境变量 EMAIL_ACCOUNT 和 EMAIL_PASSWORD 设置 Gmail 账号和应用专用密码。")
         sys.exit(1)
 
-    # --- 连接 ---
+    # --- 连接（超时60秒）---
     print(f"[连接] {IMAP_SERVER}:{IMAP_PORT} ...")
     try:
+        import socket
+        socket.setdefaulttimeout(60)
         conn = imaplib.IMAP4_SSL(IMAP_SERVER, IMAP_PORT)
     except Exception as e:
         print(f"[错误] 连接失败: {e}")

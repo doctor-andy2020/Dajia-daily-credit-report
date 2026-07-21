@@ -37,12 +37,17 @@ def get_target_dates():
         return [today]
 
 
-def run_step(description, cmd):
+def run_step(description, cmd, timeout=300):
+    """执行子步骤，带超时保护（默认5分钟）"""
     print(f"\n{'='*60}")
     print(f">>> {description}")
     print(f"{'='*60}")
-    result = subprocess.run(cmd, shell=True, cwd=str(BASE_DIR),
-                           capture_output=False)
+    try:
+        result = subprocess.run(cmd, shell=True, cwd=str(BASE_DIR),
+                               capture_output=False, timeout=timeout)
+    except subprocess.TimeoutExpired:
+        print(f"[超时] {description} 超过 {timeout}s 限制，强制终止")
+        return False
     if result.returncode != 0:
         print(f"[失败] {description} (exit code: {result.returncode})")
         return False

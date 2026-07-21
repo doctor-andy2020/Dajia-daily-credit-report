@@ -259,8 +259,7 @@ python dm_morning_runner.py
 **为什么独立**：DM信用早报和舆情日报数据源和提取方式不同（DM终端 Playwright vs 邮件 IMAP），分开调度可避免一个环节失败影响另一个，且便于独立重跑和故障恢复。
 
 **去重机制**：
-- `dm_morning_runner.py` 级别：北京时间 07:00-10:00 窗口限制 + 本地 sentinel 文件去重
-- GAS 级别：dispatch 前检查当天是否已有成功 run，有则跳过
+- `dm_morning_runner.py` 级别：北京时间 07:00-11:00 窗口限制 + 本地 sentinel 文件去重
 - GAS 级别：dispatch 前检查当天是否已有成功 run，有则跳过
 
 ### 执行步骤
@@ -349,5 +348,5 @@ python generate_qige_report.py raw_email_body_parsed.json
 
 | 文件 | 用途 |
 |:---|:---|
-| `.github/workflows/daily-report.yml` | 舆情日报定时任务（UTC 23:30 Sun-Thu = BJ 07:30 Mon-Fri） |
-| `.github/workflows/dm-morning-report.yml` | DM早报定时任务（UTC 23:30 Sun-Thu = BJ 07:30 Mon-Fri，与舆情日报同 cron） |
+| `.github/workflows/daily-report.yml` | 舆情日报 + DM早报双Job（GAS 08:12 触发，workflow_dispatch） |
+| `.github/workflows/dm-morning-report.yml` | DM早报独立兜底（仅 GAS triggerDMWorkflow / 手动，无 cron） |

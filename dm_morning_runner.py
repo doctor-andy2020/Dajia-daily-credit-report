@@ -36,12 +36,17 @@ def beijing_now():
     return datetime.datetime.now(BEIJING_TZ)
 
 
-def run_step(description, cmd):
+def run_step(description, cmd, timeout=600):
+    """执行子步骤，带超时保护（默认10分钟，DM提取较慢）"""
     print(f"\n{'='*60}")
     print(f">>> {description}")
     print(f"{'='*60}")
-    result = subprocess.run(cmd, shell=True, cwd=str(BASE_DIR),
-                           capture_output=False)
+    try:
+        result = subprocess.run(cmd, shell=True, cwd=str(BASE_DIR),
+                               capture_output=False, timeout=timeout)
+    except subprocess.TimeoutExpired:
+        print(f"[超时] {description} 超过 {timeout}s 限制，强制终止")
+        return False
     if result.returncode != 0:
         print(f"[失败] {description} (exit code: {result.returncode})")
         return False
@@ -126,10 +131,10 @@ def main():
 
     force_run = "--force" in sys.argv
 
-    # ── 时间窗口限制：仅在北京时间 07:00-10:00 执行 ──
+    # ── 时间窗口限制：仅在北京时间 07:00-11:00 执行 ──
     hour_bj = now.hour
-    if not force_run and not (7 <= hour_bj < 10):
-        print(f"[跳过] 当前北京时间 {now.strftime('%H:%M')}，不在执行窗口(07:00-10:00)内。")
+    if not force_run and not (7 <= hour_bj < 11):
+        print(f"[跳过] 当前北京时间 {now.strftime('%H:%M')}，不在执行窗口(07:00-11:00)内。")
         print(f"       使用 --force 可强制运行。")
         sys.exit(0)
 
