@@ -207,7 +207,7 @@ def format_rating(item):
     return item.get('rating', '')
 
 
-def generate_docx(data, yuqing_high, yuqing_medium, tracking, new_bond, major_events,
+def generate_docx(data, yuqing_all, tracking, new_bond, major_events,
                    pianli_rows, zhangdie_rows, faxing_rows, yuqing_filtered, gonggao_filtered,
                    output_file):
     """生成 DOCX 格式报告"""
@@ -314,7 +314,6 @@ def generate_docx(data, yuqing_high, yuqing_medium, tracking, new_bond, major_ev
     weekday = ['周一', '周二', '周三', '周四', '周五', '周六', '周日'][dt.weekday()]
     date_display = dt.strftime('%Y年%m月%d日')
 
-    risk_count = len(yuqing_high)
     yuqing_total = len(yuqing_filtered)
     yuqing_companies = len(set(item.get('name', '') for item in yuqing_filtered))
     gonggao_total = len(gonggao_filtered)
@@ -337,25 +336,21 @@ def generate_docx(data, yuqing_high, yuqing_medium, tracking, new_bond, major_ev
         ['公告板块（信用相关）', f'{gonggao_total}条'],
         ['成交异动', f'{len(pianli_rows)}条（估值偏离{len(pianli_rows)}条，前收涨跌{len(zhangdie_rows)}条）'],
         ['一级发行', f'{len(faxing_rows)}条'],
-        ['风险标记条目', f'{risk_count}条'],
         ['债圈热议 / 评级变动 / 诉讼', '债圈热议无 / 评级无变动 / 诉讼无'],
     ]
     add_table(overview_headers, overview_rows, col_widths=[6, 10])
 
     # 总体判断
-    if risk_count >= 5:
-        judgment = f'今日舆情需高度关注，识别{risk_count}项风险关注事项'
-    elif risk_count >= 2:
-        judgment = f'今日舆情需关注，识别{risk_count}项风险关注事项'
+    if yuqing_total >= 10:
+        judgment = f'今日舆情需高度关注，共{yuqing_total}条涉及{yuqing_companies}个主体'
+    elif yuqing_total >= 5:
+        judgment = f'今日舆情需关注，共{yuqing_total}条涉及{yuqing_companies}个主体'
     else:
-        judgment = '今日舆情整体平稳，无重大信用风险事件'
-    if yuqing_high:
-        companies = [item.get('name', '') for item in yuqing_high[:5]]
-        judgment += f'（{"、".join(companies[:3])}{"等" if len(yuqing_high) > 3 else ""}{len(yuqing_high)}个主体）'
-    if yuqing_medium:
-        judgment += f'，另有{len(yuqing_medium)}项重要关注。'
-    else:
-        judgment += '。'
+        judgment = f'今日舆情整体平稳，共{yuqing_total}条'
+    if yuqing_all:
+        companies = [item.get('name', '') for item in yuqing_all[:5]]
+        judgment += f'（{"、".join(companies[:3])}{"等" if len(yuqing_all) > 3 else ""}）'
+    judgment += '。'
     p = doc.add_paragraph()
     run = p.add_run(f'总体判断：{judgment}')
     run.font.name = '微软雅黑'
@@ -363,38 +358,12 @@ def generate_docx(data, yuqing_high, yuqing_medium, tracking, new_bond, major_ev
     run.bold = True
     run.font.size = Pt(10.5)
 
-    # --- 二、风险关注 ---
+    # --- 二、重要关注（合并所有舆情）---
     doc.add_paragraph('―' * 60)
-    add_heading_styled('二、风险关注', level=2, color=RGBColor(0xCC, 0x00, 0x00))
+    add_heading_styled('二、重要关注', level=2, color=RGBColor(0xCC, 0x88, 0x00))
 
-    if yuqing_high:
-        for i, item in enumerate(yuqing_high, 1):
-            add_para(f'{i}. {item.get("name", "")} — {item.get("tags", "")}',
-                     bold=True, size=Pt(11), color=RGBColor(0xCC, 0x00, 0x00))
-
-            info_lines = [
-                f'主体：{item.get("name", "")}（{format_rating(item)}）',
-                f'事件：{item.get("content", "")}',
-                f'影响判断：{generate_impact(item)}',
-                f'时间：{item.get("time", "")}',
-            ]
-            for line in info_lines:
-                p = doc.add_paragraph()
-                p.paragraph_format.left_indent = Cm(0.5)
-                run = p.add_run(line)
-                run.font.name = '微软雅黑'
-                run.element.rPr.rFonts.set(qn('w:eastAsia'), '微软雅黑')
-                run.font.size = Pt(10)
-            doc.add_paragraph()
-    else:
-        add_para('今日无风险关注事项。', color=RGBColor(0x80, 0x80, 0x80))
-
-    # --- 三、重要关注 ---
-    doc.add_paragraph('―' * 60)
-    add_heading_styled('三、重要关注', level=2, color=RGBColor(0xCC, 0x88, 0x00))
-
-    if yuqing_medium:
-        for i, item in enumerate(yuqing_medium, 1):
+    if yuqing_all:
+        for i, item in enumerate(yuqing_all, 1):
             add_para(f'{i}. {item.get("name", "")} — {item.get("tags", "")}',
                      bold=True, size=Pt(10.5))
 
@@ -412,9 +381,9 @@ def generate_docx(data, yuqing_high, yuqing_medium, tracking, new_bond, major_ev
     else:
         add_para('今日无重要关注事项。', color=RGBColor(0x80, 0x80, 0x80))
 
-    # --- 四、公告信息 ---
+    # --- 三、公告信息 ---
     doc.add_paragraph('―' * 60)
-    add_heading_styled('四、公告信息（信用相关）', level=2, color=RGBColor(0x25, 0x25, 0x25))
+    add_heading_styled('三、公告信息（信用相关）', level=2, color=RGBColor(0x25, 0x25, 0x25))
 
     if tracking:
         add_para('跟踪评级报告', bold=True, size=Pt(11))
@@ -445,12 +414,11 @@ def generate_docx(data, yuqing_high, yuqing_medium, tracking, new_bond, major_ev
         add_para('舆情+公告双重披露：以下主体同时出现在舆情和公告板块中，事件可信度高，需重点关注。',
                  bold=True, size=Pt(9), color=RGBColor(0x80, 0x80, 0x80))
         for name in overlap:
-            risk_level = '高风险' if any(item.get('name', '') == name for item in yuqing_high) else '重要关注'
-            add_para(f'  - [{risk_level}] {name}', size=Pt(9), color=RGBColor(0x80, 0x80, 0x80))
+            add_para(f'  - {name}', size=Pt(9), color=RGBColor(0x80, 0x80, 0x80))
 
-    # --- 五、成交异动 ---
+    # --- 四、成交异动 ---
     doc.add_paragraph('―' * 60)
-    add_heading_styled('五、成交异动', level=2, color=RGBColor(0x25, 0x25, 0x25))
+    add_heading_styled('四、成交异动', level=2, color=RGBColor(0x25, 0x25, 0x25))
 
     if pianli_rows:
         add_para('估值偏离', bold=True, size=Pt(11))
@@ -490,7 +458,7 @@ def generate_docx(data, yuqing_high, yuqing_medium, tracking, new_bond, major_ev
 
     # --- 六、一级发行 ---
     doc.add_paragraph('―' * 60)
-    add_heading_styled('六、一级发行', level=2, color=RGBColor(0x25, 0x25, 0x25))
+    add_heading_styled('五、一级发行', level=2, color=RGBColor(0x25, 0x25, 0x25))
 
     if faxing_rows:
         table_rows = []
@@ -556,12 +524,9 @@ def generate_report(data, output_file=None):
 
     # --- 筛选和分类舆情 ---
     yuqing_filtered = [item for item in data['yuqing'] if not should_exclude_yuqing(item)]
-    yuqing_high = [item for item in yuqing_filtered if classify_yuqing(item) == 'high']
-    yuqing_medium = [item for item in yuqing_filtered if classify_yuqing(item) == 'medium']
 
-    # 合并同主体
-    yuqing_high = merge_same_company(yuqing_high)
-    yuqing_medium = merge_same_company(yuqing_medium)
+    # 合并同主体（不再区分风险等级，统一放入"重要关注"）
+    yuqing_all = merge_same_company(yuqing_filtered)
 
     # --- 筛选和分类公告 ---
     gonggao_filtered = [item for item in data['gonggao'] if not should_exclude_gonggao(item)]
@@ -588,7 +553,6 @@ def generate_report(data, output_file=None):
     yuqing_total = len(yuqing_filtered)
     yuqing_companies = len(set(item.get('name', '') for item in yuqing_filtered))
     gonggao_total = len(gonggao_filtered)
-    risk_count = len(yuqing_high)
 
     # --- 生成报告 ---
     lines = []
@@ -606,52 +570,31 @@ def generate_report(data, output_file=None):
     lines.append(f"| **公告板块（信用相关）** | {gonggao_total}条 |")
     lines.append(f"| **成交异动** | {len(pianli_rows)}条（估值偏离{len(pianli_rows)}条，前收涨跌{len(zhangdie_rows)}条） |")
     lines.append(f"| **一级发行** | {len(faxing_rows)}条 |")
-    lines.append(f"| **风险标记条目** | {risk_count}条 |")
     lines.append(f"| **债圈热议 / 评级变动 / 诉讼** | 债圈热议无 / 评级无变动 / 诉讼无 |")
     lines.append("")
 
     # 总体判断
-    if risk_count >= 5:
-        judgment = f"今日舆情需高度关注，识别{risk_count}项风险关注事项"
-    elif risk_count >= 2:
-        judgment = f"今日舆情需关注，识别{risk_count}项风险关注事项"
+    if yuqing_total >= 10:
+        judgment = f"今日舆情需高度关注，共{yuqing_total}条涉及{yuqing_companies}个主体"
+    elif yuqing_total >= 5:
+        judgment = f"今日舆情需关注，共{yuqing_total}条涉及{yuqing_companies}个主体"
     else:
-        judgment = "今日舆情整体平稳，无重大信用风险事件"
-    if yuqing_high:
-        companies = [item.get('name', '') for item in yuqing_high[:5]]
-        judgment += f"（{';'.join(companies)}{'等' if len(yuqing_high) > 5 else ''}{len(yuqing_high)}个主体）"
-    if yuqing_medium:
-        judgment += f"，另有{len(yuqing_medium)}项重要关注。"
-    else:
-        judgment += "。"
+        judgment = f"今日舆情整体平稳，共{yuqing_total}条"
+    if yuqing_all:
+        companies = [item.get('name', '') for item in yuqing_all[:5]]
+        judgment += f"（{';'.join(companies)}{'等' if len(yuqing_all) > 5 else ''}）"
+    judgment += "。"
     lines.append(f"**总体判断**：{judgment}")
     lines.append("")
     lines.append("---")
     lines.append("")
 
-    # --- 二、重点舆情 ---
-    lines.append("## 二、🔴 风险关注")
+    # --- 二、重要关注（合并所有舆情）---
+    lines.append("## 二、🟡 重要关注")
     lines.append("")
 
-    if yuqing_high:
-        for i, item in enumerate(yuqing_high, 1):
-            lines.append(f"#### {i}. {item.get('name', '')} — {item.get('tags', '')}")
-            lines.append(f"- **主体**：{item.get('name', '')}（{format_rating(item)}）")
-            lines.append(f"- **事件**：{item.get('content', '')}")
-            lines.append(f"- **影响判断**：{generate_impact(item)}")
-            lines.append(f"- **时间**：{item.get('time', '')}")
-            lines.append("")
-    else:
-        lines.append("今日无风险关注事项。")
-        lines.append("")
-
-    lines.append("---")
-    lines.append("")
-    lines.append("## 三、🟡 重要关注")
-    lines.append("")
-
-    if yuqing_medium:
-        for i, item in enumerate(yuqing_medium, 1):
+    if yuqing_all:
+        for i, item in enumerate(yuqing_all, 1):
             lines.append(f"#### {i}. {item.get('name', '')} — {item.get('tags', '')}")
             lines.append(f"- **主体**：{item.get('name', '')}（{format_rating(item)}）")
             lines.append(f"- **事件**：{item.get('content', '')}")
@@ -663,8 +606,8 @@ def generate_report(data, output_file=None):
     lines.append("---")
     lines.append("")
 
-    # --- 四、公告 ---
-    lines.append("## 四、📋 公告信息（信用相关）")
+    # --- 三、公告 ---
+    lines.append("## 三、📋 公告信息（信用相关）")
     lines.append("")
 
     if tracking:
@@ -701,15 +644,14 @@ def generate_report(data, output_file=None):
     if overlap:
         lines.append("> **舆情+公告双重披露**：")
         for name in overlap:
-            risk_level = "🔴" if any(item.get('name', '') == name for item in yuqing_high) else "🟡"
-            lines.append(f"> - {risk_level} **{name}**，事件可信度高，重点关注")
+            lines.append(f"> - **{name}**，事件可信度高，重点关注")
         lines.append("")
 
     lines.append("---")
     lines.append("")
 
-    # --- 五、成交异动 ---
-    lines.append("## 五、📊 成交异动")
+    # --- 四、成交异动 ---
+    lines.append("## 四、📊 成交异动")
     lines.append("")
 
     if pianli_rows:
@@ -749,8 +691,8 @@ def generate_report(data, output_file=None):
     lines.append("---")
     lines.append("")
 
-    # --- 六、一级发行 ---
-    lines.append("## 六、🏦 一级发行")
+    # --- 五、一级发行 ---
+    lines.append("## 五、🏦 一级发行")
     lines.append("")
 
     if faxing_rows:
@@ -879,8 +821,9 @@ def main():
 
     # --- 数据预处理（与 generate_report 一致）---
     yuqing_filtered = [item for item in data['yuqing'] if not should_exclude_yuqing(item)]
-    yuqing_high = merge_same_company([item for item in yuqing_filtered if classify_yuqing(item) == 'high'])
-    yuqing_medium = merge_same_company([item for item in yuqing_filtered if classify_yuqing(item) == 'medium'])
+
+    # 合并同主体（不再区分风险等级）
+    yuqing_all = merge_same_company(yuqing_filtered)
 
     gonggao_filtered = [item for item in data['gonggao'] if not should_exclude_gonggao(item)]
     gonggao_classified = [(classify_gonggao(item), item) for item in gonggao_filtered]
@@ -903,7 +846,7 @@ def main():
     if not args.md_only:
         docx_file = f'{base_name}.docx'
         try:
-            generate_docx(data, yuqing_high, yuqing_medium, tracking, new_bond, major_events,
+            generate_docx(data, yuqing_all, tracking, new_bond, major_events,
                           pianli_rows, zhangdie_rows, faxing_rows, yuqing_filtered, gonggao_filtered,
                           docx_file)
         except Exception as e:
