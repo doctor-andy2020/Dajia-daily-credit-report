@@ -32,6 +32,9 @@ EXCLUDE_CONTENT_KW = [
     '回购',
 ]
 
+# 监管处罚金额阈值（万元）：低于此金额的处罚新闻将被排除
+PENALTY_AMOUNT_THRESHOLD = 100
+
 # 高风险标签 — 仅限 CLAUDE.md 中明确与风险标记关联的标签
 HIGH_RISK_TAGS = [
     '行政处罚', '监管处罚', '监管问询关注',
@@ -84,6 +87,44 @@ GONGGAO_KEEP_KW = [
 ]
 
 
+def extract_penalty_amount(content):
+    """
+    从舆情内容中提取处罚金额（万元）
+
+    常见格式：
+    - "被罚70万"
+    - "罚款30万元"
+    - "处罚金额100万"
+    - "罚没50万元"
+    - "430万罚单"
+    - "百万级罚单"
+
+    返回：金额（万元），未提取到返回 None
+    """
+    if not content:
+        return None
+
+    # 匹配模式：数字 + 万/万元
+    patterns = [
+        r'被罚[款没]?\s*(\d+(?:\.\d+)?)\s*万[元]?',
+        r'罚款[款没]?\s*(\d+(?:\.\d+)?)\s*万[元]?',
+        r'罚没\s*(\d+(?:\.\d+)?)\s*万[元]?',
+        r'处罚[款]?\s*(\d+(?:\.\d+)?)\s*万[元]?',
+        r'(\d+(?:\.\d+)?)\s*万元?\s*(?:罚款|罚没|处罚)',
+        r'(\d+(?:\.\d+)?)\s*万[元]?\s*罚单',  # 匹配"430万罚单"
+    ]
+
+    for pattern in patterns:
+        match = re.search(pattern, content)
+        if match:
+            try:
+                return float(match.group(1))
+            except (ValueError, TypeError):
+                continue
+
+    return None
+
+
 def should_exclude_yuqing(item):
     """判断舆情条目是否应排除"""
     tags = item.get('tags', '')
@@ -97,6 +138,12 @@ def should_exclude_yuqing(item):
     # 排除特定内容关键词
     for kw in EXCLUDE_CONTENT_KW:
         if kw in content:
+            return True
+
+    # 监管处罚金额过滤：低于阈值的处罚新闻排除
+    if '监管处罚' in tags or '行政处罚' in tags:
+        amount = extract_penalty_amount(content)
+        if amount is not None and amount < PENALTY_AMOUNT_THRESHOLD:
             return True
 
     return False
